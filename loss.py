@@ -1,3 +1,5 @@
+#Ravit: Why not just use torch nn.modules.loss.CrossEntropyLoss?
+
 from __future__ import absolute_import
 from __future__ import division
 

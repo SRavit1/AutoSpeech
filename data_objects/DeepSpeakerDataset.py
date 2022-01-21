@@ -67,7 +67,7 @@ class DeepSpeakerDataset(data.Dataset):
 
         if self.transform is not None:
             feature = self.transform(feature)
-        return feature, speaker_id
+        return np.expand_dims(feature, 0), speaker_id
 
     def __len__(self):
         return len(self.features)

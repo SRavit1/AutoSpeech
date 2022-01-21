@@ -8,71 +8,78 @@ import os
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from pathlib import Path
+from datetime import datetime
 
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 
 from models import resnet
-from config import cfg, update_config
-from utils import set_path, create_logger, save_checkpoint, count_parameters
+from autospeech_utils import set_path, create_logger, save_checkpoint, count_parameters
 from data_objects.DeepSpeakerDataset import DeepSpeakerDataset
 from data_objects.VoxcelebTestset import VoxcelebTestset
 from functions import train_from_scratch, validate_verification
-from loss import CrossEntropyLoss
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Train energy network')
-    # general
-    parser.add_argument('--cfg',
-                        help='experiment configure file name',
-                        required=True,
-                        type=str)
-
-    parser.add_argument('opts',
-                        help="Modify config options using the command-line",
-                        default=None,
-                        nargs=argparse.REMAINDER)
-
-    parser.add_argument('--load_path',
-                        help="The path to resumed dir",
-                        default=None)
-
-    args = parser.parse_args()
-
-    return args
+#from loss import CrossEntropyLoss
 
 
 def main():
-    args = parse_args()
-    update_config(cfg, args)
+    seed = 0
+    lr_min = 0.001
+    learning_rate = 0.01
+    
+    subdir = datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+    data_dir = "../datasets/VoxCeleb1"
+    num_workers = 0
+    num_classes=1211
+    batch_size = 256
+    begin_epoch = 0
+    end_epoch = 301
+    val_freq = 10
+    print_freq = 200
+    
+    load_path = None
+    sub_dir = "dev"
+    partial_n_frames = 300
+
+    log_dir = os.path.join("../logs/autospeech", subdir)
+    if not os.path.isdir(log_dir):  # Create the log directory if it doesn't exist
+        os.makedirs(log_dir)
+    model_dir = os.path.join("../models/autospeech", subdir)
+    if not os.path.isdir(model_dir):  # Create the model directory if it doesn't exist
+        os.makedirs(model_dir)
 
     # cudnn related setting
-    cudnn.benchmark = cfg.CUDNN.BENCHMARK
-    torch.backends.cudnn.deterministic = cfg.CUDNN.DETERMINISTIC
-    torch.backends.cudnn.enabled = cfg.CUDNN.ENABLED
+    cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = False
+    torch.backends.cudnn.enabled = True
 
     # Set the random seed manually for reproducibility.
-    np.random.seed(cfg.SEED)
-    torch.manual_seed(cfg.SEED)
-    torch.cuda.manual_seed_all(cfg.SEED)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
     # model and optimizer
-    model = eval('resnet.{}(num_classes={})'.format(
-        cfg.MODEL.NAME, cfg.MODEL.NUM_CLASSES))
+    model = resnet.resnet18(num_classes=num_classes)
     model = model.cuda()
     optimizer = optim.Adam(
         model.net_parameters() if hasattr(model, 'net_parameters') else model.parameters(),
-        lr=cfg.TRAIN.LR,
+        lr=0.01,
     )
+    
+    dummy_input = torch.zeros((1, 300, 257))
+    dummy_input = torch.zeros((1, 1, 300, 257))
+    
+    dummy_input = dummy_input.cuda()
+    torch.onnx.export(model, dummy_input, os.path.join(model_dir, "resnet18_verification_binarized.onnx"), verbose=True)
 
     # Loss
-    criterion = CrossEntropyLoss(cfg.MODEL.NUM_CLASSES).cuda()
+    #criterion = CrossEntropyLoss(num_classes).cuda()
+    criterion = torch.nn.CrossEntropyLoss().cuda()
 
     # resume && make log dir and logger
-    if args.load_path and os.path.exists(args.load_path):
-        checkpoint_file = os.path.join(args.load_path, 'Model', 'checkpoint_best.pth')
+    checkpoint_file = None
+    if load_path and os.path.exists(load_path):
+        checkpoint_file = os.path.join(load_path, 'Model', 'checkpoint_best.pth')
         assert os.path.exists(checkpoint_file)
         checkpoint = torch.load(checkpoint_file)
 
@@ -82,76 +89,61 @@ def main():
         model.load_state_dict(checkpoint['state_dict'])
         best_eer = checkpoint['best_eer']
         optimizer.load_state_dict(checkpoint['optimizer'])
-        args.path_helper = checkpoint['path_helper']
-
-        logger = create_logger(args.path_helper['log_path'])
-        logger.info("=> loaded checkpoint '{}'".format(checkpoint_file))
+        log_dir = checkpoint['path_helper']['log_path']
+        model_dir = checkpoint['path_helper']['ckpt_path']
     else:
-        exp_name = args.cfg.split('/')[-1].split('.')[0]
-        args.path_helper = set_path('logs', exp_name)
-        logger = create_logger(args.path_helper['log_path'])
-        begin_epoch = cfg.TRAIN.BEGIN_EPOCH
+        begin_epoch = 0
         best_eer = 1.0
         last_epoch = -1
-    logger.info(args)
-    logger.info(cfg)
+    
+    logger = create_logger(log_dir, subdir)
+    if checkpoint_file is not None:
+        logger.info("=> loaded checkpoint '{}'".format(checkpoint_file))
+    
     logger.info("Number of parameters: {}".format(count_parameters(model)))
 
     # dataloader
     train_dataset = DeepSpeakerDataset(
-        Path(cfg.DATASET.DATA_DIR),  cfg.DATASET.SUB_DIR, cfg.DATASET.PARTIAL_N_FRAMES)
+        Path(data_dir),  sub_dir, partial_n_frames)
     test_dataset_verification = VoxcelebTestset(
-        Path(cfg.DATASET.DATA_DIR), cfg.DATASET.PARTIAL_N_FRAMES
+        Path(data_dir), partial_n_frames
     )
-    train_loader = torch.utils.data.DataLoader(
-        dataset=train_dataset,
-        batch_size=cfg.TRAIN.BATCH_SIZE,
-        num_workers=cfg.DATASET.NUM_WORKERS,
-        pin_memory=True,
-        shuffle=True,
-        drop_last=True,
-    )
-    test_loader_verification = torch.utils.data.DataLoader(
-        dataset=test_dataset_verification,
-        batch_size=1,
-        num_workers=cfg.DATASET.NUM_WORKERS,
-        pin_memory=True,
-        shuffle=False,
-        drop_last=False,
-    )
+    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, 
+        num_workers=num_workers, pin_memory=True, shuffle=True, drop_last=True,)
+    test_loader_verification = torch.utils.data.DataLoader(dataset=test_dataset_verification, batch_size=1, 
+        num_workers=num_workers, pin_memory=True, shuffle=False, drop_last=False,)
 
     # training setting
     writer_dict = {
-        'writer': SummaryWriter(args.path_helper['log_path']),
+        'writer': SummaryWriter(log_dir),
         'train_global_steps': begin_epoch * len(train_loader),
-        'valid_global_steps': begin_epoch // cfg.VAL_FREQ,
+        'valid_global_steps': begin_epoch // val_freq,
     }
 
     # training loop
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, cfg.TRAIN.END_EPOCH, cfg.TRAIN.LR_MIN,
+        optimizer, end_epoch, lr_min,
         last_epoch=last_epoch
     )
 
-    for epoch in tqdm(range(begin_epoch, cfg.TRAIN.END_EPOCH), desc='train progress'):
+    for epoch in tqdm(range(begin_epoch, end_epoch), desc='train progress'):
         model.train()
-        train_from_scratch(cfg, model, optimizer, train_loader, criterion, epoch, writer_dict, lr_scheduler)
-        if epoch % cfg.VAL_FREQ == 0:
-            eer = validate_verification(cfg, model, test_loader_verification)
+        train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, learning_rate, print_freq, lr_scheduler)
+        if epoch % val_freq == 0:
+            eer = validate_verification(model, test_loader_verification)
 
             # remember best acc@1 and save checkpoint
             is_best = eer < best_eer
             best_eer = min(eer, best_eer)
 
             # save
-            logger.info('=> saving checkpoint to {}'.format(args.path_helper['ckpt_path']))
+            logger.info('=> saving checkpoint to {}'.format(model_dir))
             save_checkpoint({
                 'epoch': epoch + 1,
                 'state_dict': model.state_dict(),
                 'best_eer': best_eer,
-                'optimizer': optimizer.state_dict(),
-                'path_helper': args.path_helper
-            }, is_best, args.path_helper['ckpt_path'], 'checkpoint_{}.pth'.format(epoch))
+                'optimizer': optimizer.state_dict()
+            }, is_best, model_dir, 'checkpoint_{}.pth'.format(epoch))
         lr_scheduler.step(epoch)
 
 
