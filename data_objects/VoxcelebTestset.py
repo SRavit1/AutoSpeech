@@ -67,7 +67,7 @@ class VoxcelebTestset(data.Dataset):
         if self.transform is not None:
             feature1 = self.transform(feature1)
             feature2 = self.transform(feature2)
-        return feature1, feature2, issame
+        return np.expand_dims(feature1, 1), np.expand_dims(feature2, 1), issame
 
     def __len__(self):
         return len(self.test_pairs)
