@@ -10,97 +10,73 @@ from pathlib import Path
 import torch
 import torch.backends.cudnn as cudnn
 
-from models.model import Network
+#from models.model import Network
 from models import resnet
-from config import cfg, update_config
-from utils import create_logger, Genotype
+#from config import cfg, update_config
+#from autospeech_utils import create_logger#, Genotype
 from data_objects.VoxcelebTestset import VoxcelebTestset
 from functions import validate_verification
 
-
-def parse_args():
-    parser = argparse.ArgumentParser(description='Train autospeech network')
-    # general
-    parser.add_argument('--cfg',
-                        help='experiment configure file name',
-                        required=True,
-                        type=str)
-
-    parser.add_argument('opts',
-                        help="Modify config options using the command-line",
-                        default=None,
-                        nargs=argparse.REMAINDER)
-
-    parser.add_argument('--load_path',
-                        help="The path to resumed dir",
-                        default=None)
-    parser.add_argument('--text_arch',
-                        help="The path to arch",
-                        default=None)
-
-    args = parser.parse_args()
-
-    return args
-
-
 def main():
-    args = parse_args()
-    update_config(cfg, args)
-    if args.load_path is None:
-        raise AttributeError("Please specify load path.")
+    #args = parse_args()
+    #update_config(cfg, args)
+    #if load_path is None:
+    #    raise AttributeError("Please specify load path.")
+
+    seed = 0
+
+    cudnn_benchmark = True
+    cudnn_deterministic = False
+    cudnn_enabled = False
+
+    num_workers = 0
+    num_classes = 1211
+    data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
+
+    load_path = "../models/autospeech/20220128-215932/checkpoint_best.pth"
+    partial_n_frames = 300
 
     # cudnn related setting
-    cudnn.benchmark = cfg.CUDNN.BENCHMARK
-    torch.backends.cudnn.deterministic = cfg.CUDNN.DETERMINISTIC
-    torch.backends.cudnn.enabled = cfg.CUDNN.ENABLED
+    cudnn.benchmark = cudnn_benchmark
+    torch.backends.cudnn.deterministic = cudnn_deterministic
+    torch.backends.cudnn.enabled = cudnn_enabled
 
     # Set the random seed manually for reproducibility.
-    np.random.seed(cfg.SEED)
-    torch.manual_seed(cfg.SEED)
-    torch.cuda.manual_seed_all(cfg.SEED)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    #torch.cuda.manual_seed_all(seed)
 
     # model and optimizer
-    if cfg.MODEL.NAME == 'model':
-        if args.load_path and os.path.exists(args.load_path):
-            checkpoint = torch.load(args.load_path)
-            genotype = checkpoint['genotype']
-        else:
-            raise AssertionError('Please specify the model to evaluate')
-        model = Network(cfg.MODEL.INIT_CHANNELS, cfg.MODEL.NUM_CLASSES, cfg.MODEL.LAYERS, genotype)
-        model.drop_path_prob = 0.0
-    else:
-        model = eval('resnet.{}(num_classes={})'.format(cfg.MODEL.NAME, cfg.MODEL.NUM_CLASSES))
-    model = model.cuda()
+    model = resnet.resnet18(num_classes=num_classes)
+    #model = model.cuda()
 
     # resume && make log dir and logger
-    if args.load_path and os.path.exists(args.load_path):
-        checkpoint = torch.load(args.load_path)
+    if load_path and os.path.exists(load_path):
+        checkpoint = torch.load(load_path, map_location=torch.device('cpu'))
 
         # load checkpoint
         model.load_state_dict(checkpoint['state_dict'])
-        args.path_helper = checkpoint['path_helper']
+        #path_helper = checkpoint['path_helper']
 
-        logger = create_logger(os.path.dirname(args.load_path))
-        logger.info("=> loaded checkpoint '{}'".format(args.load_path))
+        #logger = create_logger(os.path.dirname(load_path))
+        #logger.info("=> loaded checkpoint '{}'".format(load_path))
     else:
         raise AssertionError('Please specify the model to evaluate')
-    logger.info(args)
-    logger.info(cfg)
 
     # dataloader
     test_dataset_verification = VoxcelebTestset(
-        Path(cfg.DATASET.DATA_DIR), cfg.DATASET.PARTIAL_N_FRAMES
+        Path(data_dir), partial_n_frames
     )
     test_loader_verification = torch.utils.data.DataLoader(
         dataset=test_dataset_verification,
         batch_size=1,
-        num_workers=cfg.DATASET.NUM_WORKERS,
-        pin_memory=True,
+        num_workers=num_workers,
+        #pin_memory=True,
         shuffle=False,
         drop_last=False,
     )
 
-    validate_verification(cfg, model, test_loader_verification)
+    validate_verification(model, test_loader_verification)
 
 
 

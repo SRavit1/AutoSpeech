@@ -28,7 +28,7 @@ def main():
     learning_rate = 0.01
     
     subdir = datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
-    data_dir = "../datasets/VoxCeleb1"
+    data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/" # "/mnt/usb/data/ravit/datasets/VoxCeleb1"
     num_workers = 0
     num_classes=1211
     batch_size = 256
@@ -59,7 +59,7 @@ def main():
     torch.cuda.manual_seed_all(seed)
 
     # model and optimizer
-    model = resnet.resnet18(num_classes=num_classes)
+    model = resnet.resnet18(num_classes=num_classes, bitwidth=2)
     model = model.cuda()
     optimizer = optim.Adam(
         model.net_parameters() if hasattr(model, 'net_parameters') else model.parameters(),
@@ -77,9 +77,10 @@ def main():
     criterion = torch.nn.CrossEntropyLoss().cuda()
 
     # resume && make log dir and logger
+    #load_path = "../models/autospeech/20220128-215932"
     checkpoint_file = None
     if load_path and os.path.exists(load_path):
-        checkpoint_file = os.path.join(load_path, 'Model', 'checkpoint_best.pth')
+        checkpoint_file = os.path.join(load_path, 'checkpoint_70.pth')
         assert os.path.exists(checkpoint_file)
         checkpoint = torch.load(checkpoint_file)
 
@@ -89,8 +90,11 @@ def main():
         model.load_state_dict(checkpoint['state_dict'])
         best_eer = checkpoint['best_eer']
         optimizer.load_state_dict(checkpoint['optimizer'])
-        log_dir = checkpoint['path_helper']['log_path']
-        model_dir = checkpoint['path_helper']['ckpt_path']
+        #log_dir = checkpoint['path_helper']['log_path']
+        #model_dir = checkpoint['path_helper']['ckpt_path']
+        subdir = "20220128-215932"
+        log_dir = os.path.join("../logs/autospeech/", subdir)
+        model_dir = os.path.join("../models/autospeech/", subdir)
     else:
         begin_epoch = 0
         best_eer = 1.0

@@ -79,12 +79,17 @@ def validate_verification(model, test_loader):
     model.eval()
     labels, distances = [], []
 
+    print("Len of test_loader", len(test_loader))
     with torch.no_grad():
         end = time.time()
         for i, (input1, input2, label) in enumerate(test_loader):
-            input1 = input1.cuda(non_blocking=True).squeeze(0)
-            input2 = input2.cuda(non_blocking=True).squeeze(0)
-            label = label.cuda(non_blocking=True)
+            if next(model.parameters()).device != 'cpu':
+                input1 = input1.cuda(non_blocking=True).squeeze(0)
+                input2 = input2.cuda(non_blocking=True).squeeze(0)
+                label = label.cuda(non_blocking=True)
+            else:
+                input1 = input1.squeeze(0)
+                input2 = input2.squeeze(0)
 
             # compute output
             outputs1 = model(input1).mean(dim=0).unsqueeze(0)
