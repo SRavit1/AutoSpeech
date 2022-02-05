@@ -14,6 +14,10 @@ import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
 
+import concurrent.futures
+import multiprocessing
+import itertools
+
 from models import resnet
 from autospeech_utils import set_path, create_logger, save_checkpoint, count_parameters
 from data_objects.DeepSpeakerDataset import DeepSpeakerDataset
@@ -21,32 +25,19 @@ from data_objects.VoxcelebTestset import VoxcelebTestset
 from functions import train_from_scratch, validate_verification
 #from loss import CrossEntropyLoss
 
-
-def main():
-    seed = 0
-    lr_min = 0.001
-    learning_rate = 0.01
-    
-    subdir = datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
-    data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/" # "/mnt/usb/data/ravit/datasets/VoxCeleb1"
-    num_workers = 0
+def train(a, bitwidth, seed): # a unused
+    lr_min=0.001
+    learning_rate=0.01
+    num_workers=0
     num_classes=1211
-    batch_size = 256
-    begin_epoch = 0
-    end_epoch = 301
-    val_freq = 10
-    print_freq = 200
-    
-    load_path = None
-    sub_dir = "dev"
-    partial_n_frames = 300
-
-    log_dir = os.path.join("../logs/autospeech", subdir)
-    if not os.path.isdir(log_dir):  # Create the log directory if it doesn't exist
-        os.makedirs(log_dir)
-    model_dir = os.path.join("../models/autospeech", subdir)
-    if not os.path.isdir(model_dir):  # Create the model directory if it doesn't exist
-        os.makedirs(model_dir)
+    batch_size=256
+    begin_epoch=0
+    end_epoch=301
+    val_freq=10
+    print_freq=200
+    load_path=None
+    sub_dir="dev"
+    partial_n_frames=300
 
     # cudnn related setting
     cudnn.benchmark = True
@@ -57,20 +48,29 @@ def main():
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    
+    subdir = "bitwidth_" + str(bitwidth) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+    data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/" # "/mnt/usb/data/ravit/datasets/VoxCeleb1"
+
+    log_dir = os.path.join("../logs/autospeech", subdir)
+    if not os.path.isdir(log_dir):  # Create the log directory if it doesn't exist
+        os.makedirs(log_dir)
+    model_dir = os.path.join("../models/autospeech", subdir)
+    if not os.path.isdir(model_dir):  # Create the model directory if it doesn't exist
+        os.makedirs(model_dir)
 
     # model and optimizer
-    model = resnet.resnet18(num_classes=num_classes, bitwidth=2)
+    model = resnet.resnet18(num_classes=num_classes, bitwidth=bitwidth)
     model = model.cuda()
     optimizer = optim.Adam(
         model.net_parameters() if hasattr(model, 'net_parameters') else model.parameters(),
         lr=0.01,
     )
     
-    dummy_input = torch.zeros((1, 300, 257))
     dummy_input = torch.zeros((1, 1, 300, 257))
     
     dummy_input = dummy_input.cuda()
-    torch.onnx.export(model, dummy_input, os.path.join(model_dir, "resnet18_verification_binarized.onnx"), verbose=True)
+    torch.onnx.export(model, dummy_input, os.path.join(model_dir, subdir + "_resnet18_verification.onnx"), verbose=False)
 
     # Loss
     #criterion = CrossEntropyLoss(num_classes).cuda()
@@ -150,6 +150,28 @@ def main():
             }, is_best, model_dir, 'checkpoint_{}.pth'.format(epoch))
         lr_scheduler.step(epoch)
 
+def main():
+    bitwidth_options = [2, 3]
+    sparsity_options = [0]
+    model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
+    
+    """
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        processes = []
+        for (bitwidth, sparsity) in model_combinations:
+            processes.append[executor.submit(train, bitwidth)]
+    """
+    """
+    processes = []
+    for (bitwidth, sparsity) in model_combinations:
+        p = multiprocessing.Process(target=train, args=[bitwidth])
+        p.start()
+        processes.append(p)
+    for process in processes:
+        process.join()
+    """
+    for (bitwidth, sparsity) in model_combinations:
+        torch.multiprocessing.spawn(train, args=(bitwidth,sparsity))
 
 if __name__ == '__main__':
     main()
