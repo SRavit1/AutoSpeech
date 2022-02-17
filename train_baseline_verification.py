@@ -25,12 +25,15 @@ from data_objects.VoxcelebTestset import VoxcelebTestset
 from functions import train_from_scratch, validate_verification
 #from loss import CrossEntropyLoss
 
-def train(a, bitwidth, seed): # a unused
+cuda = True
+
+def train(a, bitwidth, sparsity): # a unused
+    seed=0
     lr_min=0.001
     learning_rate=0.01
     num_workers=0
     num_classes=1211
-    batch_size=256
+    batch_size=128
     begin_epoch=0
     end_epoch=301
     val_freq=10
@@ -49,8 +52,9 @@ def train(a, bitwidth, seed): # a unused
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     
-    subdir = "bitwidth_" + str(bitwidth) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
-    data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/" # "/mnt/usb/data/ravit/datasets/VoxCeleb1"
+    subdir = "bitwidth_" + str(bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+    print("Model/Log Subdir", subdir)
+    data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1" #"/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
 
     log_dir = os.path.join("../logs/autospeech", subdir)
     if not os.path.isdir(log_dir):  # Create the log directory if it doesn't exist
@@ -61,7 +65,8 @@ def train(a, bitwidth, seed): # a unused
 
     # model and optimizer
     model = resnet.resnet18(num_classes=num_classes, bitwidth=bitwidth)
-    model = model.cuda()
+    if cuda:
+        model = model.cuda()
     optimizer = optim.Adam(
         model.net_parameters() if hasattr(model, 'net_parameters') else model.parameters(),
         lr=0.01,
@@ -69,30 +74,33 @@ def train(a, bitwidth, seed): # a unused
     
     dummy_input = torch.zeros((1, 1, 300, 257))
     
-    dummy_input = dummy_input.cuda()
+    if cuda:
+        dummy_input = dummy_input.cuda()
     torch.onnx.export(model, dummy_input, os.path.join(model_dir, subdir + "_resnet18_verification.onnx"), verbose=False)
 
     # Loss
     #criterion = CrossEntropyLoss(num_classes).cuda()
-    criterion = torch.nn.CrossEntropyLoss().cuda()
+    criterion = torch.nn.CrossEntropyLoss()
+    if cuda:
+        criterion = criterion.cuda()
 
     # resume && make log dir and logger
-    #load_path = "../models/autospeech/20220128-215932"
+    #subdir = "20220128-215932"
+    #load_path = os.path.join("../models/autospeech", subdir)
     checkpoint_file = None
     if load_path and os.path.exists(load_path):
-        checkpoint_file = os.path.join(load_path, 'checkpoint_70.pth')
+        checkpoint_file = os.path.join(load_path, 'checkpoint_60.pth')
         assert os.path.exists(checkpoint_file)
         checkpoint = torch.load(checkpoint_file)
 
         # load checkpoint
         begin_epoch = checkpoint['epoch']
         last_epoch = checkpoint['epoch']
-        model.load_state_dict(checkpoint['state_dict'])
+        model.load_state_dict(checkpoint['state_dict'], strict=False)
         best_eer = checkpoint['best_eer']
         optimizer.load_state_dict(checkpoint['optimizer'])
         #log_dir = checkpoint['path_helper']['log_path']
         #model_dir = checkpoint['path_helper']['ckpt_path']
-        subdir = "20220128-215932"
         log_dir = os.path.join("../logs/autospeech/", subdir)
         model_dir = os.path.join("../models/autospeech/", subdir)
     else:
@@ -113,9 +121,9 @@ def train(a, bitwidth, seed): # a unused
         Path(data_dir), partial_n_frames
     )
     train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=batch_size, 
-        num_workers=num_workers, pin_memory=True, shuffle=True, drop_last=True,)
+        num_workers=num_workers, pin_memory=cuda, shuffle=True, drop_last=True)
     test_loader_verification = torch.utils.data.DataLoader(dataset=test_dataset_verification, batch_size=1, 
-        num_workers=num_workers, pin_memory=True, shuffle=False, drop_last=False,)
+        num_workers=num_workers, pin_memory=cuda, shuffle=False, drop_last=False)
 
     # training setting
     writer_dict = {
@@ -132,9 +140,9 @@ def train(a, bitwidth, seed): # a unused
 
     for epoch in tqdm(range(begin_epoch, end_epoch), desc='train progress'):
         model.train()
-        train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, learning_rate, print_freq, lr_scheduler)
+        train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, learning_rate, print_freq, lr_scheduler, cuda=cuda)
         if epoch % val_freq == 0:
-            eer = validate_verification(model, test_loader_verification)
+            eer = validate_verification(model, test_loader_verification, cuda=cuda)
 
             # remember best acc@1 and save checkpoint
             is_best = eer < best_eer
@@ -151,20 +159,20 @@ def train(a, bitwidth, seed): # a unused
         lr_scheduler.step(epoch)
 
 def main():
-    bitwidth_options = [2, 3]
-    sparsity_options = [0]
+    bitwidth_options = [32] #[1, 2, 3]
+    sparsity_options = [0] #[0, 0.1]
     model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
-    
+
     """
     with concurrent.futures.ProcessPoolExecutor() as executor:
         processes = []
         for (bitwidth, sparsity) in model_combinations:
-            processes.append[executor.submit(train, bitwidth)]
+            processes.append(executor.submit(train, bitwidth, sparsity))
     """
     """
     processes = []
     for (bitwidth, sparsity) in model_combinations:
-        p = multiprocessing.Process(target=train, args=[bitwidth])
+        p = multiprocessing.Process(target=train, args=[bitwidth, sparsity])
         p.start()
         processes.append(p)
     for process in processes:

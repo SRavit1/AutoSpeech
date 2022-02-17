@@ -11,7 +11,7 @@ from autospeech_utils import AverageMeter, ProgressMeter, accuracy
 plt.switch_backend('agg')
 logger = logging.getLogger(__name__)
 
-def train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, lr, print_freq, lr_scheduler=None):
+def train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, lr, print_freq, lr_scheduler=None, cuda=False):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -36,8 +36,9 @@ def train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_
         # measure data loading time
         data_time.update(time.time() - end)
 
-        input = input.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True)
+        if cuda:
+            input = input.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
 
         # compute output
         output = model(input)
@@ -70,7 +71,7 @@ def train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_
         if i % print_freq == 0:
             progress.print(i)
 
-def validate_verification(model, test_loader):
+def validate_verification(model, test_loader, cuda=False):
     batch_time = AverageMeter('Time', ':6.3f')
     progress = ProgressMeter(
         len(test_loader), batch_time, prefix='Test: ', logger=logger)
@@ -83,7 +84,7 @@ def validate_verification(model, test_loader):
     with torch.no_grad():
         end = time.time()
         for i, (input1, input2, label) in enumerate(test_loader):
-            if next(model.parameters()).device != 'cpu':
+            if cuda and next(model.parameters()).device != 'cpu':
                 input1 = input1.cuda(non_blocking=True).squeeze(0)
                 input2 = input2.cuda(non_blocking=True).squeeze(0)
                 label = label.cuda(non_blocking=True)

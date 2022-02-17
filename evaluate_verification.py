@@ -33,7 +33,9 @@ def main():
     num_classes = 1211
     data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
 
-    load_path = "../models/autospeech/20220128-215932/checkpoint_best.pth"
+    #load_path = "../models/autospeech/20220128-215932/checkpoint_best.pth"
+    load_path = "../models/autospeech/bitwidth_32_sparsity_0_20220214-223514/checkpoint_40.pth"
+    #load_path = "../models/autospeech/bitwidth_8_sparsity_0_20220208-122531/checkpoint_300.pth"
     partial_n_frames = 300
 
     # cudnn related setting

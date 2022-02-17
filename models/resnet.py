@@ -42,7 +42,7 @@ model_urls = {
 
 def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1, full=True, binarized=True, bitwidth=1) -> nn.Conv2d:
     """3x3 convolution with padding"""
-    if full:
+    if not binarized:
         return nn.Conv2d(in_planes, 
             out_planes, kernel_size=3, stride=stride, 
             padding=dilation, groups=groups, bias=False, 
@@ -56,7 +56,7 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
 
 def conv1x1(in_planes: int, out_planes: int, stride: int = 1, full=True, binarized=True, bitwidth=1) -> nn.Conv2d:
     """1x1 convolution"""
-    if full:
+    if not binarized:
         return nn.Conv2d(in_planes, 
             out_planes, kernel_size=1, stride=stride,
             bias=False)
@@ -91,7 +91,7 @@ class BasicBlock(nn.Module):
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride, full=full, binarized=binarized, bitwidth=bitwidth)
         self.bn1 = norm_layer(planes)
-        self.act = nn.ReLU(inplace=True) if full else nn.Hardtanh(inplace=True)
+        self.act = nn.ReLU(inplace=True) if not binarized else nn.Hardtanh(inplace=True)
         self.conv2 = conv3x3(planes, planes, full=full, binarized=binarized, bitwidth=bitwidth)
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
@@ -207,22 +207,24 @@ class ResNet(nn.Module):
             )
         self.groups = groups
         self.base_width = width_per_group
-        if full:
+        if not binarized:
             self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         else:
-            self.conv1 = BinarizeConv2d(bitwidth, bitwidth, 1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            #self.conv1 = BinarizeConv2d(bitwidth, bitwidth, 1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(self.inplanes)
-        self.act = nn.ReLU(inplace=True) if full else nn.Hardtanh(inplace=True)
+        self.act = nn.ReLU(inplace=True) if not binarized else nn.Hardtanh(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], full=full, binarized=binarized, bitwidth=bitwidth)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], full=full, binarized=binarized, bitwidth=bitwidth)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], full=full, binarized=binarized, bitwidth=bitwidth)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], full=full, binarized=binarized, bitwidth=bitwidth)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
-        if full:
+        if not binarized:
             self.fc = nn.Linear(512 * block.expansion, num_classes)
         else:
-            self.fc = BinarizeLinear(bitwidth, bitwidth, 512 * block.expansion, num_classes)
+            self.fc = nn.Linear(512 * block.expansion, num_classes)
+            #self.fc = BinarizeLinear(bitwidth, bitwidth, 512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -299,6 +301,8 @@ class ResNet(nn.Module):
         x = torch.flatten(x, 1)
         x = self.fc(x)
 
+        print("Finished forward pass of ResNet! Exiting")
+        exit(0)
         return x
 
     def forward(self, x: Tensor) -> Tensor:
