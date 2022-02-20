@@ -40,7 +40,7 @@ model_urls = {
 }
 
 
-def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1, full=True, binarized=True, bitwidth=1) -> nn.Conv2d:
+def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1, binarized=True, bitwidth=1, weight_bitwidth=1) -> nn.Conv2d:
     """3x3 convolution with padding"""
     if not binarized:
         return nn.Conv2d(in_planes, 
@@ -48,20 +48,20 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
             padding=dilation, groups=groups, bias=False, 
             dilation=dilation,)
     else:
-        return BinarizeConv2d(bitwidth, bitwidth, in_planes, 
+        return BinarizeConv2d(bitwidth, bitwidth, weight_bitwidth, in_planes, 
             out_planes, kernel_size=3, stride=stride, 
             padding=dilation, groups=groups, bias=False, 
-            dilation=dilation,)
+            dilation=dilation)
 
 
-def conv1x1(in_planes: int, out_planes: int, stride: int = 1, full=True, binarized=True, bitwidth=1) -> nn.Conv2d:
+def conv1x1(in_planes: int, out_planes: int, stride: int = 1, binarized=True, bitwidth=1, weight_bitwidth=1) -> nn.Conv2d:
     """1x1 convolution"""
     if not binarized:
         return nn.Conv2d(in_planes, 
             out_planes, kernel_size=1, stride=stride,
             bias=False)
     else:
-        return BinarizeConv2d(bitwidth, bitwidth, in_planes, 
+        return BinarizeConv2d(bitwidth, bitwidth, weight_bitwidth, in_planes, 
             out_planes, kernel_size=1, stride=stride,
             bias=False)
 
@@ -79,7 +79,7 @@ class BasicBlock(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        full=True, binarized=True, bitwidth=1
+        binarized=True, bitwidth=1, weight_bitwidth=1
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -89,17 +89,19 @@ class BasicBlock(nn.Module):
         if dilation > 1:
             raise NotImplementedError("Dilation > 1 not supported in BasicBlock")
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
-        self.conv1 = conv3x3(inplanes, planes, stride, full=full, binarized=binarized, bitwidth=bitwidth)
+        self.conv1 = conv3x3(inplanes, planes, stride, binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.bn1 = norm_layer(planes)
         self.act = nn.ReLU(inplace=True) if not binarized else nn.Hardtanh(inplace=True)
-        self.conv2 = conv3x3(planes, planes, full=full, binarized=binarized, bitwidth=bitwidth)
+        self.conv2 = conv3x3(planes, planes, binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
 
     def forward(self, x: Tensor) -> Tensor:
-        identity = x
-
+        #identity = x
+        identity = x.clone()
+        #identity.retain_grad()
+        
         out = self.conv1(x)
         out = self.bn1(out)
         out = self.act(out)
@@ -186,13 +188,14 @@ class ResNet(nn.Module):
         width_per_group: int = 64,
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        full=True, binarized=True, bitwidth=1
+        binarized=True, bitwidth=1, weight_bitwidth=1, input_channels=3, normalize_output=False
     ) -> None:
         super().__init__()
         #_log_api_usage_once(self)
         if norm_layer is None:
             norm_layer = nn.BatchNorm2d
         self._norm_layer = norm_layer
+        self.normalize_output=normalize_output
 
         self.inplanes = 64
         self.dilation = 1
@@ -208,23 +211,23 @@ class ResNet(nn.Module):
         self.groups = groups
         self.base_width = width_per_group
         if not binarized:
-            self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            self.conv1 = nn.Conv2d(input_channels, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         else:
-            #self.conv1 = BinarizeConv2d(bitwidth, bitwidth, 1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
-            self.conv1 = nn.Conv2d(1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
+            #self.conv1 = BinarizeConv2d(bitwidth, bitwidth, 1, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False, weight_bitwidth=weight_bitwidth)
+            self.conv1 = nn.Conv2d(input_channels, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.act = nn.ReLU(inplace=True) if not binarized else nn.Hardtanh(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
-        self.layer1 = self._make_layer(block, 64, layers[0], full=full, binarized=binarized, bitwidth=bitwidth)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], full=full, binarized=binarized, bitwidth=bitwidth)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], full=full, binarized=binarized, bitwidth=bitwidth)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], full=full, binarized=binarized, bitwidth=bitwidth)
+        self.layer1 = self._make_layer(block, 64, layers[0], binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         if not binarized:
             self.fc = nn.Linear(512 * block.expansion, num_classes)
         else:
             self.fc = nn.Linear(512 * block.expansion, num_classes)
-            #self.fc = BinarizeLinear(bitwidth, bitwidth, 512 * block.expansion, num_classes)
+            #self.fc = BinarizeLinear(bitwidth, bitwidth, 512 * block.expansion, num_classes, weight_bitwidth=weight_bitwidth)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -250,7 +253,7 @@ class ResNet(nn.Module):
         blocks: int,
         stride: int = 1,
         dilate: bool = False,
-        full=True, binarized=True, bitwidth=1
+        binarized=True, bitwidth=1, weight_bitwidth=1
     ) -> nn.Sequential:
         norm_layer = self._norm_layer
         downsample = None
@@ -260,14 +263,14 @@ class ResNet(nn.Module):
             stride = 1
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                conv1x1(self.inplanes, planes * block.expansion, stride, full=full, binarized=binarized, bitwidth=bitwidth),
+                conv1x1(self.inplanes, planes * block.expansion, stride, binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth),
                 norm_layer(planes * block.expansion),
             )
 
         layers = []
         layers.append(
             block(
-                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer, full=full, binarized=binarized, bitwidth=bitwidth
+                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer, binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth
             )
         )
         self.inplanes = planes * block.expansion
@@ -279,7 +282,7 @@ class ResNet(nn.Module):
                     groups=self.groups,
                     base_width=self.base_width,
                     dilation=self.dilation,
-                    norm_layer=norm_layer, full=full, binarized=binarized, bitwidth=bitwidth
+                    norm_layer=norm_layer, binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth
                 )
             )
 
@@ -287,22 +290,33 @@ class ResNet(nn.Module):
 
     def _forward_impl(self, x: Tensor) -> Tensor:
         # See note [TorchScript super()]
+        #print("input shape", x.shape)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.act(x)
         x = self.maxpool(x)
+        #print("conv1 output shape", x.shape)
 
         x = self.layer1(x)
+        #print("layer1 output shape", x.shape)
         x = self.layer2(x)
+        #print("layer2 output shape", x.shape)
         x = self.layer3(x)
+        #print("layer3 output shape", x.shape)
         x = self.layer4(x)
+        #print("layer4 output shape", x.shape)
 
         x = self.avgpool(x)
+        #print("avgpool output shape", x.shape)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        #print("layer1 output shape", x.shape)
 
-        print("Finished forward pass of ResNet! Exiting")
-        exit(0)
+        if self.normalize_output:
+          x_norm = torch.sqrt(torch.sum(torch.mul(x,x), dim=1))  #torch.linalg.norm(x)
+          x_norm = torch.unsqueeze(x_norm, 1)
+          x = torch.div(x, x_norm)
+
         return x
 
     def forward(self, x: Tensor) -> Tensor:
@@ -315,17 +329,17 @@ def _resnet(
     layers: List[int],
     pretrained: bool,
     progress: bool,
-    full=True, binarized=True, bitwidth=1,
+    binarized=True, bitwidth=1, weight_bitwidth=1, input_channels=3, normalize_output=False,
     **kwargs: Any,
 ) -> ResNet:
-    model = ResNet(block, layers, full=full, binarized=binarized, bitwidth=bitwidth, **kwargs)
+    model = ResNet(block, layers, binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=input_channels, normalize_output=normalize_output, **kwargs)
     #if pretrained:
         #state_dict = load_state_dict_from_url(model_urls[arch], progress=progress)
         #model.load_state_dict(state_dict)
     return model
 
 
-def resnet18(pretrained: bool = False, progress: bool = True, full=True, binarized=True, bitwidth=1, **kwargs: Any) -> ResNet:
+def resnet18(pretrained: bool = False, progress: bool = True, binarized=True, bitwidth=1, weight_bitwidth=1, input_channels=3, normalize_output=False, **kwargs: Any) -> ResNet:
     r"""ResNet-18 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
@@ -333,10 +347,10 @@ def resnet18(pretrained: bool = False, progress: bool = True, full=True, binariz
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet("resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, full=full, binarized=binarized, bitwidth=bitwidth, **kwargs)
+    return _resnet("resnet18", BasicBlock, [2, 2, 2, 2], pretrained, progress, binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=input_channels, normalize_output=normalize_output, **kwargs)
 
 
-def resnet34(pretrained: bool = False, progress: bool = True, full=True, binarized=True, bitwidth=1, **kwargs: Any) -> ResNet:
+def resnet34(pretrained: bool = False, progress: bool = True, binarized=True, bitwidth=1, weight_bitwidth=1, input_channels=3, normalize_output=False, **kwargs: Any) -> ResNet:
     r"""ResNet-34 model from
     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_.
 
@@ -344,7 +358,7 @@ def resnet34(pretrained: bool = False, progress: bool = True, full=True, binariz
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet("resnet34", BasicBlock, [3, 4, 6, 3], pretrained, progress, full=full, binarized=binarized, bitwidth=bitwidth, **kwargs)
+    return _resnet("resnet34", BasicBlock, [3, 4, 6, 3], pretrained, progress, binarized=binarized, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=input_channels, normalize_output=normalize_output, **kwargs)
 
 
 def resnet50(pretrained: bool = False, progress: bool = True, **kwargs: Any) -> ResNet:

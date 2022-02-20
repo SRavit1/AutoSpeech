@@ -27,7 +27,7 @@ from functions import train_from_scratch, validate_verification
 
 cuda = True
 
-def train(a, bitwidth, sparsity): # a unused
+def train(a, bitwidth, sparsity, weight_bitwidth=1): # a unused
     seed=0
     lr_min=0.001
     learning_rate=0.01
@@ -52,7 +52,7 @@ def train(a, bitwidth, sparsity): # a unused
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     
-    subdir = "bitwidth_" + str(bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+    subdir = "bitwidth_" + str(bitwidth) + "_weight_bitwidth_" + str(weight_bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
     print("Model/Log Subdir", subdir)
     data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1" #"/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
 
@@ -64,7 +64,7 @@ def train(a, bitwidth, sparsity): # a unused
         os.makedirs(model_dir)
 
     # model and optimizer
-    model = resnet.resnet18(num_classes=num_classes, bitwidth=bitwidth)
+    model = resnet.resnet18(num_classes=num_classes, bitwidth=bitwidth, input_channels=1, normalize_output=False)
     if cuda:
         model = model.cuda()
     optimizer = optim.Adam(
@@ -159,9 +159,13 @@ def train(a, bitwidth, sparsity): # a unused
         lr_scheduler.step(epoch)
 
 def main():
+    """
     bitwidth_options = [32] #[1, 2, 3]
+    weight_bitwidth_options = [32]
     sparsity_options = [0] #[0, 0.1]
-    model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
+    model_combinations = list(itertools.product(bitwidth_options, weight_bitwidth_options, sparsity_options))
+    """
+    model_combinations = [(32, 32, 0), (8, 8, 0)]
 
     """
     with concurrent.futures.ProcessPoolExecutor() as executor:
@@ -178,8 +182,8 @@ def main():
     for process in processes:
         process.join()
     """
-    for (bitwidth, sparsity) in model_combinations:
-        torch.multiprocessing.spawn(train, args=(bitwidth,sparsity))
+    for (bitwidth, weight_bitwidth, sparsity) in model_combinations:
+        torch.multiprocessing.spawn(train, args=(bitwidth, sparsity, weight_bitwidth))
 
 if __name__ == '__main__':
     main()
