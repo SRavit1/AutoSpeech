@@ -27,7 +27,7 @@ from functions import train_from_scratch, validate_verification
 
 cuda = True
 
-def train(a, bitwidth, sparsity, weight_bitwidth=1): # a unused
+def train(a, binarized, quantized, bitwidth, sparsity): # a unused
     seed=0
     lr_min=0.001
     learning_rate=0.01
@@ -52,7 +52,17 @@ def train(a, bitwidth, sparsity, weight_bitwidth=1): # a unused
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     
-    subdir = "bitwidth_" + str(bitwidth) + "_weight_bitwidth_" + str(weight_bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+    if not binarized and not quantized:
+      prefix = "full_"
+      subdir = prefix + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+    else:
+      if binarized:
+        prefix = "binarized_"
+      elif quantized:
+        prefix = "quantized_"
+        
+      subdir = prefix + "bitwidth_" + str(bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+
     print("Model/Log Subdir", subdir)
     data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1" #"/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
 
@@ -64,13 +74,14 @@ def train(a, bitwidth, sparsity, weight_bitwidth=1): # a unused
         os.makedirs(model_dir)
 
     # model and optimizer
-    model = resnet.resnet18(num_classes=num_classes, bitwidth=bitwidth, input_channels=1, normalize_output=False)
+    model = resnet.resnet18(binarized=binarized, quantized=quantized, num_classes=num_classes, bitwidth=bitwidth, input_channels=1, normalize_output=False)
     if cuda:
         model = model.cuda()
     optimizer = optim.Adam(
         model.net_parameters() if hasattr(model, 'net_parameters') else model.parameters(),
         lr=0.01,
     )
+    model.load_state_dict(torch.load("../models/autospeech/pretrained/checkpoint_best.pth"), strict=False)
     
     dummy_input = torch.zeros((1, 1, 300, 257))
     
@@ -160,30 +171,16 @@ def train(a, bitwidth, sparsity, weight_bitwidth=1): # a unused
 
 def main():
     """
+    binarized_options = [False]
+    quantized_options = [True]
     bitwidth_options = [32] #[1, 2, 3]
-    weight_bitwidth_options = [32]
     sparsity_options = [0] #[0, 0.1]
-    model_combinations = list(itertools.product(bitwidth_options, weight_bitwidth_options, sparsity_options))
+    model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
     """
-    model_combinations = [(32, 32, 0), (8, 8, 0)]
+    model_combinations = [(False, True, 32, 0)]
 
-    """
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        processes = []
-        for (bitwidth, sparsity) in model_combinations:
-            processes.append(executor.submit(train, bitwidth, sparsity))
-    """
-    """
-    processes = []
-    for (bitwidth, sparsity) in model_combinations:
-        p = multiprocessing.Process(target=train, args=[bitwidth, sparsity])
-        p.start()
-        processes.append(p)
-    for process in processes:
-        process.join()
-    """
-    for (bitwidth, weight_bitwidth, sparsity) in model_combinations:
-        torch.multiprocessing.spawn(train, args=(bitwidth, sparsity, weight_bitwidth))
+    for (binarized, quantized, bitwidth, sparsity) in model_combinations:
+        torch.multiprocessing.spawn(train, args=(binarized, quantized, bitwidth, sparsity))
 
 if __name__ == '__main__':
     main()
