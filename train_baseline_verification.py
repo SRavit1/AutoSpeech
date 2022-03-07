@@ -13,6 +13,7 @@ from datetime import datetime
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
+import torchsummary
 
 import concurrent.futures
 import multiprocessing
@@ -75,6 +76,7 @@ def train(a, binarized, quantized, bitwidth, sparsity): # a unused
 
     # model and optimizer
     model = resnet.resnet18(binarized=binarized, quantized=quantized, num_classes=num_classes, bitwidth=bitwidth, input_channels=1, normalize_output=False)
+    #torchsummary.summary(model.cuda(), (1, 300, 257))
     if cuda:
         model = model.cuda()
     optimizer = optim.Adam(
@@ -177,7 +179,7 @@ def main():
     sparsity_options = [0] #[0, 0.1]
     model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
     """
-    model_combinations = [(False, True, 32, 0)]
+    model_combinations = [(False, False, 8, 0)]
 
     for (binarized, quantized, bitwidth, sparsity) in model_combinations:
         torch.multiprocessing.spawn(train, args=(binarized, quantized, bitwidth, sparsity))

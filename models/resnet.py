@@ -48,10 +48,13 @@ def conv3x3(in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, d
             padding=dilation, groups=groups, bias=False, 
             dilation=dilation,)
     elif binarized:
-        return BinarizeConv2d(bitwidth, bitwidth, in_planes, 
-            out_planes, kernel_size=3, stride=stride, 
-            padding=dilation, groups=groups, bias=False, 
-            dilation=dilation)
+        layer = nn.Sequential(
+            BinarizeConv2d(bitwidth, bitwidth, in_planes, 
+              out_planes, kernel_size=3, stride=stride, 
+              padding=dilation, groups=groups, bias=False, 
+              dilation=dilation)
+        )
+        return layer
     elif quantized:
         return QuantizeConv2d(in_planes, 
             out_planes, bitwidth=bitwidth, kernel_size=3, stride=stride, 
@@ -66,9 +69,12 @@ def conv1x1(in_planes: int, out_planes: int, stride: int = 1, binarized=True, qu
             out_planes, kernel_size=1, stride=stride,
             bias=False)
     elif binarized:
-        return BinarizeConv2d(bitwidth, bitwidth, in_planes, 
-            out_planes, kernel_size=1, stride=stride,
-            bias=False)
+        layer = nn.Sequential(
+            BinarizeConv2d(bitwidth, bitwidth, in_planes, 
+                out_planes, kernel_size=1, stride=stride,
+                bias=False)
+        )
+        return layer
     elif quantized:
         return QuantizeConv2d(in_planes, 
             out_planes, bitwidth=bitwidth, kernel_size=1, stride=stride,
@@ -111,10 +117,11 @@ class BasicBlock(nn.Module):
         identity = x.clone()
         #identity.retain_grad()
         
-        out = self.conv1(x)
+        out = self.act(x)
+        out = self.conv1(out)
         out = self.bn1(out)
-        out = self.act(out)
 
+        out = self.act(out)
         out = self.conv2(out)
         out = self.bn2(out)
 
@@ -122,7 +129,7 @@ class BasicBlock(nn.Module):
             identity = self.downsample(x)
 
         out += identity
-        out = self.act(out)
+        #out = self.act(out)
 
         return out
 
@@ -305,13 +312,13 @@ class ResNet(nn.Module):
         # See note [TorchScript super()]
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.act(x)
         x = self.maxpool(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+        x = self.act(x)
 
         x = self.avgpool(x)
         x = torch.flatten(x, 1)

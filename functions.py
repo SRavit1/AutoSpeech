@@ -53,7 +53,13 @@ def train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
+        for p in model.modules():
+            if hasattr(p, 'weight_org'):
+                p.weight.data.copy_(p.weight_org)
         optimizer.step()
+        for p in model.modules():
+            if hasattr(p, 'weight_org'):
+                p.weight_org.copy_(p.weight.data.clamp_(-1,1))
 
         # measure elapsed time
         batch_time.update(time.time() - end)
