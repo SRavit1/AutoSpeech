@@ -241,6 +241,7 @@ class ResNet(nn.Module):
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], binarized=binarized, quantized=quantized, bitwidth=bitwidth)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], binarized=binarized, quantized=quantized, bitwidth=bitwidth)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        self.bn2 = norm_layer(512)
         if not binarized and not quantized:
             self.fc = nn.Linear(512 * block.expansion, num_classes)
         elif binarized:
@@ -311,8 +312,8 @@ class ResNet(nn.Module):
     def _forward_impl(self, x: Tensor) -> Tensor:
         # See note [TorchScript super()]
         x = self.conv1(x)
-        x = self.bn1(x)
         x = self.maxpool(x)
+        x = self.bn1(x)
 
         x = self.layer1(x)
         x = self.layer2(x)
@@ -321,6 +322,7 @@ class ResNet(nn.Module):
         x = self.act(x)
 
         x = self.avgpool(x)
+        x = self.bn2(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
 
