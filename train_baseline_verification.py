@@ -28,7 +28,7 @@ from functions import train_from_scratch, validate_verification
 
 cuda = True
 
-def train(a, binarized, quantized, bitwidth, sparsity): # a unused
+def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unused
     seed=0
     lr_min=0.001
     learning_rate=0.01
@@ -62,7 +62,7 @@ def train(a, binarized, quantized, bitwidth, sparsity): # a unused
       elif quantized:
         prefix = "quantized_"
         
-      subdir = prefix + "bitwidth_" + str(bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+      subdir = prefix + "bitwidth_" + str(bitwidth) + "_weight_bitwidth_" + str(weight_bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
 
     print("Model/Log Subdir", subdir)
     data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1" #"/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
@@ -75,7 +75,7 @@ def train(a, binarized, quantized, bitwidth, sparsity): # a unused
         os.makedirs(model_dir)
 
     # model and optimizer
-    model = resnet.resnet18(binarized=binarized, quantized=quantized, num_classes=num_classes, bitwidth=bitwidth, input_channels=1, normalize_output=False)
+    model = resnet.resnet18(binarized=binarized, quantized=quantized, num_classes=num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=1, normalize_output=False)
     #torchsummary.summary(model.cuda(), (1, 300, 257))
     if cuda:
         model = model.cuda()
@@ -84,6 +84,9 @@ def train(a, binarized, quantized, bitwidth, sparsity): # a unused
         lr=0.01,
     )
     model.load_state_dict(torch.load("../models/autospeech/pretrained/checkpoint_best.pth"), strict=False)
+    for p in model.modules():
+      if hasattr(p, 'weight_org'):
+        p.weight_org.copy_(p.weight.data)
     
     dummy_input = torch.zeros((1, 1, 300, 257))
     
@@ -179,10 +182,10 @@ def main():
     sparsity_options = [0] #[0, 0.1]
     model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
     """
-    model_combinations = [(False, False, 8, 0)]
+    model_combinations = [(True, False, 4, 4, 0)] #binarized, quantized, activation bitwidth, weight bitwidth, sparsity
 
-    for (binarized, quantized, bitwidth, sparsity) in model_combinations:
-        torch.multiprocessing.spawn(train, args=(binarized, quantized, bitwidth, sparsity))
+    for (binarized, quantized, bitwidth, weight_bitwidth, sparsity) in model_combinations:
+        torch.multiprocessing.spawn(train, args=(binarized, quantized, bitwidth, weight_bitwidth, sparsity))
 
 if __name__ == '__main__':
     main()
