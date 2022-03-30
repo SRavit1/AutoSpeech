@@ -65,7 +65,7 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
       subdir = prefix + "bitwidth_" + str(bitwidth) + "_weight_bitwidth_" + str(weight_bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
 
     print("Model/Log Subdir", subdir)
-    data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1" #"/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
+    data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1"
 
     log_dir = os.path.join("../logs/autospeech", subdir)
     if not os.path.isdir(log_dir):  # Create the log directory if it doesn't exist

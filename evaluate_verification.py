@@ -35,7 +35,9 @@ num_classes = 1211
 data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
 
 #load_path = "../models/autospeech/quantized_bitwidth_32_sparsity_0_20220224-123359/checkpoint_300.pth"
-load_path = "../models/autospeech/pretrained/checkpoint_best.pth"
+#load_path = "../models/autospeech/binarized_bitwidth_8_sparsity_0_20220306-095603/checkpoint_50.pth"
+load_path = "../models/autospeech/binarized_bitwidth_1_sparsity_0_20220302-074431/checkpoint_60.pth"
+#load_path = "../models/autospeech/pretrained/checkpoint_best.pth"
 partial_n_frames = 300
 
 # cudnn related setting
@@ -51,7 +53,8 @@ torch.manual_seed(seed)
 # model and optimizer
 quantized=False
 model = resnet.resnet18(num_classes=num_classes, binarized=False, quantized=quantized, input_channels=1, bitwidth=32)
-model.forward(torch.zeros((1,1,300,257)))
+model.forward(torch.rand((1,1,300,257)))
+exit(0)
 #model = model.cuda()
 
 # resume && make log dir and logger
@@ -103,7 +106,6 @@ for (weight_name, weight_value) in model_weights.items():
   weight_dist_file = os.path.join(dists_dir, weight_name + "_dist.png")
   plt.savefig(weight_dist_file)
 
-exit(0)
 # dataloader
 test_dataset_verification = VoxcelebTestset(
     Path(data_dir), partial_n_frames
