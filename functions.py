@@ -76,6 +76,7 @@ def train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_
 
         if i % print_freq == 0:
             progress.print(i)
+    return top1.avg, top5.avg, losses.avg
 
 def validate_verification(model, test_loader, cuda=False):
     batch_time = AverageMeter('Time', ':6.3f')

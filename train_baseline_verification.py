@@ -9,6 +9,7 @@ from tensorboardX import SummaryWriter
 from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
+from matplotlib import pyplot as plt
 
 import torch
 import torch.optim as optim
@@ -19,7 +20,7 @@ import concurrent.futures
 import multiprocessing
 import itertools
 
-from models import resnet
+from models import resnet, resnet_full, resnet_quantized, resnet_dense_xnor
 from autospeech_utils import set_path, create_logger, save_checkpoint, count_parameters
 from data_objects.DeepSpeakerDataset import DeepSpeakerDataset
 from data_objects.VoxcelebTestset import VoxcelebTestset
@@ -75,7 +76,13 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
         os.makedirs(model_dir)
 
     # model and optimizer
-    model = resnet.resnet18(binarized=binarized, quantized=quantized, num_classes=num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=1, normalize_output=False)
+    if not binarized and not quantized:
+      model = resnet_full.resnet18(num_classes=num_classes, input_channels=1, normalize_output=False)
+    elif binarized:
+      model = resnet_dense_xnor.resnet18(num_classes=num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=1, normalize_output=False)
+    elif quantized:
+      model = resnet_quantized.resnet18(num_classes=num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=1, normalize_output=False)
+
     #torchsummary.summary(model.cuda(), (1, 300, 257))
     if cuda:
         model = model.cuda()
@@ -154,11 +161,20 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
         last_epoch=last_epoch
     )
 
+    loss_history = []
+    top1_history = []
+    top5_history = []
+    eer_history = []
     for epoch in tqdm(range(begin_epoch, end_epoch), desc='train progress'):
         model.train()
-        train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, learning_rate, print_freq, lr_scheduler, cuda=cuda)
+        top1, top5, loss = train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, learning_rate, print_freq, lr_scheduler, cuda=cuda)
+        loss_history.append(loss)
+        top1_history.append(top1)
+        top5_history.append(top5)
+
         if epoch % val_freq == 0:
             eer = validate_verification(model, test_loader_verification, cuda=cuda)
+            eer_history.append(eer)
 
             # remember best acc@1 and save checkpoint
             is_best = eer < best_eer
@@ -172,7 +188,40 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
                 'best_eer': best_eer,
                 'optimizer': optimizer.state_dict()
             }, is_best, model_dir, 'checkpoint_{}.pth'.format(epoch))
+
         lr_scheduler.step(epoch)
+
+        #TODO: Save plot of loss, accuracy, eer
+        epochs = list(range(1, epoch+2))
+        epochs_eval = list(range(1, epoch+2, val_freq))
+
+        fig_loss, ax_loss = plt.subplots()
+        ax_loss.plot(epochs, loss_history)
+        ax_loss.set_title("Training Loss Convergence")
+        ax_loss.set_xlabel("Epochs")
+        ax_loss.set_ylabel("Training Loss")
+        fig_loss.savefig(os.path.join(log_dir, "loss_convergence.png"))
+        fig_top1, ax_top1 = plt.subplots()
+        ax_top1.plot(epochs, top1_history)
+        ax_top1.set_title("Training Top1 Accuracy Convergence")
+        ax_top1.set_xlabel("Epochs")
+        ax_top1.set_ylabel("Training Top1")
+        fig_top1.savefig(os.path.join(log_dir, "top1_convergence.png"))
+        fig_top5, ax_top5 = plt.subplots()
+        ax_top5.plot(epochs, top5_history)
+        ax_top5.set_title("Training Top5 Accuracy Congergence")
+        ax_top5.set_xlabel("Epochs")
+        ax_top5.set_ylabel("Training Top5")
+        fig_top5.savefig(os.path.join(log_dir, "top5_convergence.png"))
+        fig_eer, ax_eer = plt.subplots()
+        ax_eer.plot(epochs_eval, eer_history)
+        ax_eer.set_title("Evaluation EER Convergence")
+        ax_eer.set_xlabel("Epochs")
+        ax_eer.set_ylabel("EER")
+        fig_eer.savefig(os.path.join(log_dir, "eer_convergence.png"))
+
+        plt.close('all')
+
 
 def main():
     """
