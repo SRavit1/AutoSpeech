@@ -34,10 +34,10 @@ num_workers = 0
 num_classes = 1211
 data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
 
-#load_path = "../models/autospeech/quantized_bitwidth_32_sparsity_0_20220224-123359/checkpoint_300.pth"
-#load_path = "../models/autospeech/binarized_bitwidth_8_sparsity_0_20220306-095603/checkpoint_50.pth"
-load_path = "../models/autospeech/binarized_bitwidth_1_sparsity_0_20220302-074431/checkpoint_60.pth"
-#load_path = "../models/autospeech/pretrained/checkpoint_best.pth"
+#model_name = "quantized_bitwidth_2_weight_bitwidth_2_sparsity_0_20220404-081824"
+#load_path = os.path.join("../models/autospeech", model_name, "checkpoint_init.pth")
+model_name = "quantized_bitwidth_4_sparsity_0_20220304-073633"
+load_path = os.path.join("../models/autospeech", model_name, "checkpoint_best.pth")
 partial_n_frames = 300
 
 # cudnn related setting
@@ -51,10 +51,9 @@ torch.manual_seed(seed)
 #torch.cuda.manual_seed_all(seed)
 
 # model and optimizer
-quantized=False
-model = resnet.resnet18(num_classes=num_classes, binarized=False, quantized=quantized, input_channels=1, bitwidth=32)
+model = resnet.resnet18(num_classes=num_classes, binarized=False, quantized=False, input_channels=1, bitwidth=32)
+model.eval()
 model.forward(torch.rand((1,1,300,257)))
-exit(0)
 #model = model.cuda()
 
 # resume && make log dir and logger
@@ -63,8 +62,8 @@ if load_path and os.path.exists(load_path):
 
     # load checkpoint
     model.load_state_dict(checkpoint['state_dict'], strict=False)
-    checkpoint['state_dict']['fc1.weight'] = checkpoint['state_dict']['classifier.weight']
-    checkpoint['state_dict']['fc1.bias'] = checkpoint['state_dict']['classifier.bias']
+    #checkpoint['state_dict']['fc1.weight'] = checkpoint['state_dict']['classifier.weight']
+    #checkpoint['state_dict']['fc1.bias'] = checkpoint['state_dict']['classifier.bias']
     #path_helper = checkpoint['path_helper']
 
     #logger = create_logger(os.path.dirname(load_path))
@@ -72,39 +71,8 @@ if load_path and os.path.exists(load_path):
 else:
     raise AssertionError('Please specify the model to evaluate')
 
-model_weights = {
-  "conv1":model.conv1,
-  "conv2_1": list(model.layer1.modules())[2],
-  "conv2_2": list(model.layer1.modules())[5],
-  "conv3_1": list(model.layer1.modules())[8],
-  "conv3_2": list(model.layer1.modules())[11],
-  "conv4_1": list(model.layer2.modules())[2],
-  "conv4_2": list(model.layer2.modules())[5],
-  "conv4_d": list(model.layer2.modules())[8],
-  "conv5_1": list(model.layer2.modules())[11],
-  "conv5_2": list(model.layer2.modules())[14],
-  "conv6_1": list(model.layer2.modules())[2],
-  "conv6_2": list(model.layer2.modules())[5],
-  "conv6_d": list(model.layer2.modules())[8],
-  "conv7_1": list(model.layer2.modules())[11],
-  "conv7_2": list(model.layer2.modules())[14],
-  "conv8_1": list(model.layer2.modules())[2],
-  "conv8_2": list(model.layer2.modules())[5],
-  "conv8_d": list(model.layer2.modules())[8],
-  "conv9_1": list(model.layer2.modules())[11],
-  "conv9_2": list(model.layer2.modules())[14],
-  "fc1": model.fc
-}
-
-dists_dir = "./dists"
-for (weight_name, weight_value) in model_weights.items():
-  plt.clf()
-  plt.hist(weight_value.weight.detach().flatten().numpy(), range=(-0.5, 0.5))
-  plt.title(weight_name + " Weight Distribution")
-  plt.xlabel("Weight value")
-  plt.ylabel("Frequency")
-  weight_dist_file = os.path.join(dists_dir, weight_name + "_dist.png")
-  plt.savefig(weight_dist_file)
+print(model.forward(torch.ones((1, 1, 300, 257))).flatten()[:10])
+exit(0)
 
 # dataloader
 test_dataset_verification = VoxcelebTestset(
@@ -119,4 +87,4 @@ test_loader_verification = torch.utils.data.DataLoader(
     drop_last=False,
 )
 
-#validate_verification(model, test_loader_verification)
+validate_verification(model, test_loader_verification)
