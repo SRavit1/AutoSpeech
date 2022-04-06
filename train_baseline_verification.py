@@ -97,9 +97,6 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
     pretrained_ckpt = "checkpoint_best.pth"
     pretrained_model_path = os.path.join(pretrained_model_dir, pretrained_ckpt)
     model.load_state_dict(torch.load(os.path.join("../models/autospeech/", pretrained_model_path))["state_dict"], strict=False)
-    for p in model.modules():
-      if hasattr(p, 'weight_org'):
-        p.weight_org.copy_(p.weight.data)
     
     dummy_input = torch.zeros((1, 1, 300, 257))
     if cuda:
