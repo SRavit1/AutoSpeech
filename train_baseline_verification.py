@@ -90,16 +90,29 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
         model.net_parameters() if hasattr(model, 'net_parameters') else model.parameters(),
         lr=0.01,
     )
-    model.load_state_dict(torch.load("../models/autospeech/pretrained/checkpoint_best.pth"), strict=False)
+
+    #initialize model weights using existing resnet model
+    #pretrained_model_path = "pretrained/checkpoint_best.pth"
+    pretrained_model_dir = "quantized_bitwidth_4_sparsity_0_20220304-073633"
+    pretrained_ckpt = "checkpoint_best.pth"
+    pretrained_model_path = os.path.join(pretrained_model_dir, pretrained_ckpt)
+    model.load_state_dict(torch.load(os.path.join("../models/autospeech/", pretrained_model_path))["state_dict"], strict=False)
     for p in model.modules():
       if hasattr(p, 'weight_org'):
         p.weight_org.copy_(p.weight.data)
     
     dummy_input = torch.zeros((1, 1, 300, 257))
-    
     if cuda:
         dummy_input = dummy_input.cuda()
     torch.onnx.export(model, dummy_input, os.path.join(model_dir, subdir + "_resnet18_verification.onnx"), verbose=False)
+
+    save_checkpoint({
+        'epoch': 0,
+        'state_dict': model.state_dict(),
+        'best_eer': 0,
+        'optimizer': optimizer.state_dict()
+    }, False, model_dir, 'checkpoint_init.pth')
+    print("Saved initial model path")
 
     # Loss
     #criterion = CrossEntropyLoss(num_classes).cuda()
@@ -107,12 +120,13 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
     if cuda:
         criterion = criterion.cuda()
 
-    # resume && make log dir and logger
-    #subdir = "20220128-215932"
+    # resume training && make log dir and logger
+    #subdir = "quantized_bitwidth_2_weight_bitwidth_2_sparsity_0_20220404-081824"
     #load_path = os.path.join("../models/autospeech", subdir)
+    load_path = None
     checkpoint_file = None
     if load_path and os.path.exists(load_path):
-        checkpoint_file = os.path.join(load_path, 'checkpoint_60.pth')
+        checkpoint_file = os.path.join(load_path, 'checkpoint_init.pth')
         assert os.path.exists(checkpoint_file)
         checkpoint = torch.load(checkpoint_file)
 
@@ -158,9 +172,11 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
     # training loop
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, end_epoch, lr_min,
-        last_epoch=last_epoch
+        #last_epoch=last_epoch
     )
 
+    #TODO: Save raw data in JSON, in case we want to generate more nuanced graph
+    #TODO: Add plot generation and saving to autospeech_utils, so it can be used by multiple files
     loss_history = []
     top1_history = []
     top5_history = []
@@ -231,7 +247,7 @@ def main():
     sparsity_options = [0] #[0, 0.1]
     model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
     """
-    model_combinations = [(True, False, 4, 4, 0)] #binarized, quantized, activation bitwidth, weight bitwidth, sparsity
+    model_combinations = [(False, True, 1, 1, 0)] #binarized, quantized, activation bitwidth, weight bitwidth, sparsity
 
     for (binarized, quantized, bitwidth, weight_bitwidth, sparsity) in model_combinations:
         torch.multiprocessing.spawn(train, args=(binarized, quantized, bitwidth, weight_bitwidth, sparsity))
