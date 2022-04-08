@@ -11,7 +11,7 @@ import torch
 import torch.backends.cudnn as cudnn
 
 #from models.model import Network
-from models import resnet
+from models import resnet, resnet_full, resnet_dense_xnor, resnet_quantized
 #from config import cfg, update_config
 #from autospeech_utils import create_logger#, Genotype
 from data_objects.VoxcelebTestset import VoxcelebTestset
@@ -34,9 +34,9 @@ num_workers = 0
 num_classes = 1211
 data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
 
-model_name = "quantized_bitwidth_1_weight_bitwidth_1_sparsity_0_20220404-212154"
-#load_path = os.path.join("../models/autospeech", model_name, "checkpoint_best.pth")
-load_path = os.path.join("../models/autospeech", model_name, "checkpoint_init.pth")
+model_name = "quantized_bitwidth_1_weight_bitwidth_1_sparsity_0_20220406-144455"
+load_path = os.path.join("../models/autospeech", model_name, "checkpoint_best.pth")
+#load_path = os.path.join("../models/autospeech", model_name, "checkpoint_init.pth")
 partial_n_frames = 300
 
 # cudnn related setting
@@ -50,7 +50,16 @@ torch.manual_seed(seed)
 #torch.cuda.manual_seed_all(seed)
 
 # model and optimizer
-model = resnet.resnet18(num_classes=num_classes, binarized=False, quantized=True, input_channels=1, bitwidth=2)
+binarized = False
+quantized = True
+bitwidth = 2
+weight_bitwidth = 2
+if not binarized and not quantized:
+  model = resnet_full.resnet18(num_classes=num_classes, input_channels=1, normalize_output=False)
+elif binarized:
+  model = resnet_dense_xnor.resnet18(num_classes=num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=1, normalize_output=False)
+elif quantized:
+  model = resnet_quantized.resnet18(num_classes=num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=1, normalize_output=False)
 model.eval()
 #model = model.cuda()
 
