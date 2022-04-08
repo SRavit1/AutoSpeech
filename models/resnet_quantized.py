@@ -201,7 +201,8 @@ class ResNet(nn.Module):
         self.groups = groups
         self.base_width = width_per_group
 
-        self.conv1 = QuantizeConv2d(input_channels, self.inplanes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, kernel_size=7, stride=2, padding=3, bias=False)
+        #self.conv1 = QuantizeConv2d(input_channels, self.inplanes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(input_channels, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(self.inplanes)
         self.act = nn.Hardtanh(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -211,7 +212,8 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.bn2 = norm_layer(512)
-        self.fc = QuantizeLinear(512 * block.expansion, num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
+        #self.fc = QuantizeLinear(512 * block.expansion, num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
+        self.fc = nn.Linear(512 * block.expansion, num_classes)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
