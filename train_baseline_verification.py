@@ -91,6 +91,7 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
         lr=0.01,
     )
 
+    #Tianmu: Can simply change bitwidth of each layer (no need to copy)
     #initialize model weights using existing resnet model
     #pretrained_model_path = "pretrained/checkpoint_best.pth"
     pretrained_model_dir = "quantized_bitwidth_4_sparsity_0_20220304-073633"
@@ -184,6 +185,9 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
         loss_history.append(loss)
         top1_history.append(top1)
         top5_history.append(top5)
+        logger.info("Epoch average loss {}".format(loss))
+        logger.info("Epoch average top1 {}".format(top1))
+        logger.info("Epoch average top5 {}".format(top5))
 
         if epoch % val_freq == 0:
             eer = validate_verification(model, test_loader_verification, cuda=cuda)
@@ -204,7 +208,6 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
 
         lr_scheduler.step(epoch)
 
-        #TODO: Save plot of loss, accuracy, eer
         epochs = list(range(1, epoch+2))
         epochs_eval = list(range(1, epoch+2, val_freq))
 
@@ -244,7 +247,7 @@ def main():
     sparsity_options = [0] #[0, 0.1]
     model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
     """
-    model_combinations = [(False, True, 1, 1, 0)] #binarized, quantized, activation bitwidth, weight bitwidth, sparsity
+    model_combinations = [(False, True, 2, 1, 0)] #binarized, quantized, activation bitwidth, weight bitwidth, sparsity
 
     for (binarized, quantized, bitwidth, weight_bitwidth, sparsity) in model_combinations:
         torch.multiprocessing.spawn(train, args=(binarized, quantized, bitwidth, weight_bitwidth, sparsity))
