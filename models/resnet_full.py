@@ -270,17 +270,24 @@ class ResNet(nn.Module):
     def _forward_impl(self, x: Tensor) -> Tensor:
         # See note [TorchScript super()]
         x = self.conv1(x)
+        print("conv1 output", x.flatten()[:10])
         x = self.maxpool(x)
         x = self.bn1(x)
+        print("maxpool/bn1 output", x.flatten()[:10])
 
         x = self.layer1(x)
+        print("layer1 output", x.flatten()[:10])
         x = self.layer2(x)
+        print("layer2 output", x.flatten()[:10])
         x = self.layer3(x)
+        print("layer3 output", x.flatten()[:10])
         x = self.layer4(x)
+        print("layer4 output", x.flatten()[:10])
         x = self.act(x)
 
         x = self.avgpool(x)
         x = self.bn2(x)
+        print("avgpool/bn2 output", x.flatten()[:10])
         x = torch.flatten(x, 1)
         x = self.fc(x)
 

@@ -67,7 +67,6 @@ def compute_eer(distances, labels):
     eer = fprs[np.nanargmin(np.absolute((1 - tprs) - fprs))]
     return eer
 
-
 def accuracy(output, target, topk=(1,)):
     """Computes the accuracy over the k top predictions for the specified values of k"""
     with torch.no_grad():
