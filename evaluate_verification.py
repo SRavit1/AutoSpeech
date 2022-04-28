@@ -38,7 +38,7 @@ num_classes = 1211
 #data_dir = "/home/nanoproj/ravit/speaker_verification/datasets/VoxCeleb1/"
 data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1"
 
-model_name = "full_20220418-062348"
+model_name = "full_20220420-060518"
 
 checkpoint_name = "checkpoint_best.pth"
 log_dir = os.path.join("../logs/autospeech", model_name)
@@ -104,21 +104,12 @@ exit(0)
 #=====
 """
 
-model.eval()
-print("model weights", model.conv1.weight.flatten()[:10])
-input_tensor = torch.ones((1, 1, 300, 257)).cuda()
-with torch.no_grad():
-    model_pred = model.forward(input_tensor)
-print("model prediction", model_pred.flatten()[:10])
-
 # resume && make log dir and logger
 if load_path and os.path.exists(load_path):
     checkpoint = torch.load(load_path)#, map_location=torch.device('cpu'))
 
     print("Epochs Trained", checkpoint["epoch"])
     print("Best EER Achieved", checkpoint["best_eer"])
-
-    print("Checkpoint conv1 weights", checkpoint['state_dict']["conv1.weight"].flatten()[:10])
 
     # load checkpoint
     load_result = model.load_state_dict(checkpoint['state_dict'])#, strict=False)
@@ -133,11 +124,11 @@ else:
     raise AssertionError('Please specify the model to evaluate')
 
 model.eval()
-print("model weights", model.conv1.weight.flatten()[:10])
+#print("model weights", model.conv1.weight.flatten()[:10])
 input_tensor = torch.ones((1, 1, 300, 257)).cuda()
 with torch.no_grad():
     model_pred = model.forward(input_tensor)
-print("model prediction", model_pred.flatten()[:10])
+#print("model prediction", model_pred.flatten()[:10])
 exit(0)
 
 # dataloader
@@ -154,7 +145,7 @@ test_loader_verification = torch.utils.data.DataLoader(
 )
 distances_labels_file = os.path.join(log_dir, "distances_labels.json")
 
-print("Begin evaluating", model_name, checkpoint_name)
+#print("Begin evaluating", model_name, checkpoint_name)
 
 calculate = True
 if calculate:

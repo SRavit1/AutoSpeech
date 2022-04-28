@@ -28,22 +28,23 @@ from functions import train_from_scratch, validate_verification
 #from loss import CrossEntropyLoss
 
 cuda = True
+seed=0
+lr_min=0.001
+learning_rate=0.01
+num_workers=0
+num_classes=1211
+batch_size=128
+begin_epoch=0
+end_epoch=301
+pretrain_epoch = 50
+val_freq=10
+print_freq=200
+load_path=None
+sub_dir="dev"
+partial_n_frames=300
 
-def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unused
-    seed=0
-    lr_min=0.001
-    learning_rate=0.01
-    num_workers=0
-    num_classes=1211
-    batch_size=128
-    begin_epoch=0
-    end_epoch=301
-    val_freq=10
-    print_freq=200
-    load_path=None
-    sub_dir="dev"
-    partial_n_frames=300
-
+#def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history, wbw_history): # a unused
+def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history, wbw_history): # a unused
     # cudnn related setting
     cudnn.benchmark = True
     torch.backends.cudnn.deterministic = False
@@ -55,15 +56,20 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
     torch.cuda.manual_seed_all(seed)
     
     if not binarized and not quantized:
-      prefix = "full_"
+      prefix = "full"
       subdir = prefix + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
     else:
       if binarized:
-        prefix = "binarized_"
+        prefix = "binarized"
       elif quantized:
-        prefix = "quantized_"
+        prefix = "quantized"
         
-      subdir = prefix + "bitwidth_" + str(bitwidth) + "_weight_bitwidth_" + str(weight_bitwidth) + "_sparsity_" + str(sparsity) + "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
+      subdir = prefix
+      subdir += "_abw_" + str(bitwidth)
+      subdir += "_wbw_" + str(weight_bitwidth)
+      if sparsity > 0:
+        subdir += "_sparsity_" + str(sparsity)
+      subdir += "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
 
     print("Model/Log Subdir", subdir)
     data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1"
@@ -71,7 +77,8 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
     log_dir = os.path.join("../logs/autospeech", subdir)
     if not os.path.isdir(log_dir):  # Create the log directory if it doesn't exist
         os.makedirs(log_dir)
-    model_dir = os.path.join("../models/autospeech", subdir)
+    #model_dir = os.path.join("../models/autospeech", subdir)
+    model_dir = os.path.join(log_dir, "models")
     if not os.path.isdir(model_dir):  # Create the model directory if it doesn't exist
         os.makedirs(model_dir)
 
@@ -93,13 +100,13 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
 
     #Tianmu: Can simply change bitwidth of each layer (no need to copy)
     #initialize model weights using existing resnet model
+    
     #pretrained_model_path = "pretrained/checkpoint_best.pth"
-    """
-    pretrained_model_dir = "quantized_bitwidth_2_weight_bitwidth_2_sparsity_0_20220407-062840"
+    pretrained_model_dir = "full_20220413-054624"
     pretrained_ckpt = "checkpoint_best.pth"
     pretrained_model_path = os.path.join(pretrained_model_dir, pretrained_ckpt)
     model.load_state_dict(torch.load(os.path.join("../models/autospeech/", pretrained_model_path))["state_dict"], strict=False)
-    """
+    
     dummy_input = torch.zeros((1, 1, 300, 257))
     if cuda:
         dummy_input = dummy_input.cuda()
@@ -119,35 +126,11 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
     if cuda:
         criterion = criterion.cuda()
 
-    # resume training && make log dir and logger
-    #subdir = "quantized_bitwidth_2_weight_bitwidth_2_sparsity_0_20220404-081824"
-    #load_path = os.path.join("../models/autospeech", subdir)
-    load_path = None
-    checkpoint_file = None
-    if load_path and os.path.exists(load_path):
-        checkpoint_file = os.path.join(load_path, 'checkpoint_init.pth')
-        assert os.path.exists(checkpoint_file)
-        checkpoint = torch.load(checkpoint_file)
-
-        # load checkpoint
-        begin_epoch = checkpoint['epoch']
-        last_epoch = checkpoint['epoch']
-        model.load_state_dict(checkpoint['state_dict'], strict=False)
-        best_eer = checkpoint['best_eer']
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        #log_dir = checkpoint['path_helper']['log_path']
-        #model_dir = checkpoint['path_helper']['ckpt_path']
-        log_dir = os.path.join("../logs/autospeech/", subdir)
-        model_dir = os.path.join("../models/autospeech/", subdir)
-    else:
-        begin_epoch = 0
-        best_eer = 1.0
-        last_epoch = -1
+    begin_epoch = 0
+    best_eer = 1.0
+    last_epoch = -1
     
     logger = create_logger(log_dir, subdir)
-    if checkpoint_file is not None:
-        logger.info("=> loaded checkpoint '{}'".format(checkpoint_file))
-    
     logger.info("Number of parameters: {}".format(count_parameters(model)))
 
     # dataloader
@@ -175,14 +158,31 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
     )
 
     #TODO: Save raw data in JSON, in case we want to generate more nuanced graph
-    #TODO: Add plot generation and saving to autospeech_utils, so it can be used by multiple files
     loss_history = []
     top1_history = []
     top5_history = []
     eer_history = []
+    if binarized or quantized:
+        if binarized or quantized:
+            epochs = list(range(1, end_epoch))
+            fig_bw, ax_bw = plt.subplots()
+            ax_bw.plot(epochs, abw_history, label='activation bw')
+            ax_bw.plot(epochs, wbw_history, label='weight bw')
+            ax_bw.set_title("Bitwidth Adjustment")
+            ax_bw.set_xlabel("Epochs")
+            ax_bw.set_ylabel("EER")
+            ax_bw.legend()
+            fig_bw.savefig(os.path.join(log_dir, "bw_adjustment.png"))
+
+        plt.close('all')
+    
     for epoch in tqdm(range(begin_epoch, end_epoch), desc='train progress'):
+        if binarized or quantized:
+            if epoch==0 or (not abw_history[epoch]==abw_history[epoch-1]) or (not wbw_history[epoch]==wbw_history[epoch-1]):
+                logger.info("Activation bw: {}, Weight bw: {}".format(abw_history[epoch], wbw_history[epoch]))
+            model.change_bitwidth(abw_history[epoch], wbw_history[epoch])
+
         model.train()
-        """
         top1, top5, loss = train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, learning_rate, print_freq, lr_scheduler, cuda=cuda)
         loss_history.append(loss)
         top1_history.append(top1)
@@ -190,21 +190,10 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
         logger.info("Epoch average loss {}".format(loss))
         logger.info("Epoch average top1 {}".format(top1))
         logger.info("Epoch average top5 {}".format(top5))
-        """
-
         if epoch % val_freq == 0:
-            """
             eer = validate_verification(model, test_loader_verification, cuda=cuda)
             eer_history.append(eer)
-            """
             model.eval()
-            eer = 0.9
-
-            print("Checkpoint conv1 weights", model.state_dict()["conv1.weight"].flatten()[:10])
-            input_tensor = torch.ones((1, 1, 300, 257)).cuda()
-            with torch.no_grad():
-                model_pred = model.forward(input_tensor)
-            print("model prediction", model_pred.flatten()[:10])
 
             # remember best acc@1 and save checkpoint
             is_best = eer < best_eer
@@ -218,7 +207,6 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
                 'best_eer': best_eer,
                 'optimizer': optimizer.state_dict()
             }, is_best, model_dir, 'checkpoint_{}.pth'.format(epoch))
-            break
 
         lr_scheduler.step(epoch)
 
@@ -249,21 +237,16 @@ def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity): # a unu
         ax_eer.set_xlabel("Epochs")
         ax_eer.set_ylabel("EER")
         fig_eer.savefig(os.path.join(log_dir, "eer_convergence.png"))
-
         plt.close('all')
 
 def main():
-    """
-    binarized_options = [False]
-    quantized_options = [True]
-    bitwidth_options = [32] #[1, 2, 3]
-    sparsity_options = [0] #[0, 0.1]
-    model_combinations = list(itertools.product(bitwidth_options, sparsity_options))
-    """
-    model_combinations = [(False, False, 2, 1, 0)] #binarized, quantized, activation bitwidth, weight bitwidth, sparsity
+    abw_history = [4]*25+[2]*(end_epoch-begin_epoch-1-25)
+    wbw_history = [4]*25+[2]*25+[1]*(end_epoch-begin_epoch-1-(25+25))
 
-    for (binarized, quantized, bitwidth, weight_bitwidth, sparsity) in model_combinations:
-        torch.multiprocessing.spawn(train, args=(binarized, quantized, bitwidth, weight_bitwidth, sparsity))
+    model_combinations = [(False, True, 2, 1, 0, abw_history, wbw_history)] #binarized, quantized, activation bitwidth, weight bitwidth, sparsity, pretrain abw, pretrain wbw
+
+    for (binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history, wbw_history) in model_combinations:
+        train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history, wbw_history)
 
 if __name__ == '__main__':
     main()
