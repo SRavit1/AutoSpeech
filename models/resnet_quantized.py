@@ -86,6 +86,15 @@ class BasicBlock(nn.Module):
         self.downsample = downsample
         self.stride = stride
 
+    def change_bitwidth(self, wbw, abw):
+        self.conv1.bitwidth = abw
+        self.conv1.weight_bitwidth = wbw
+        self.conv2.bitwidth = abw
+        self.conv2.weight_bitwidth = wbw
+        if self.downsample is not None:
+            self.downsample.bitwidth = abw
+            self.downsample.weight_bitwidth = wbw
+
     def forward(self, x: Tensor) -> Tensor:
         #identity = x
         identity = x.clone()
@@ -231,6 +240,17 @@ class ResNet(nn.Module):
                     nn.init.constant_(m.bn3.weight, 0)  # type: ignore[arg-type]
                 elif isinstance(m, BasicBlock):
                     nn.init.constant_(m.bn2.weight, 0)  # type: ignore[arg-type]
+
+    def change_bitwidth(self, wbw, abw):
+        #change bitwidth of all layers/submodules to new_bitwidth
+        for layer in self.layer1.children():
+            layer.change_bitwidth(wbw, abw)
+        for layer in self.layer2.children():
+            layer.change_bitwidth(wbw, abw)
+        for layer in self.layer3.children():
+            layer.change_bitwidth(wbw, abw)
+        for layer in self.layer4.children():
+            layer.change_bitwidth(wbw, abw)
 
     def _make_layer(
         self,

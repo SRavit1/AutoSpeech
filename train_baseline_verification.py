@@ -10,6 +10,7 @@ from tqdm import tqdm
 from pathlib import Path
 from datetime import datetime
 from matplotlib import pyplot as plt
+import json
 
 import torch
 import torch.optim as optim
@@ -43,8 +44,8 @@ load_path=None
 sub_dir="dev"
 partial_n_frames=300
 
-#def train(a, binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history, wbw_history): # a unused
-def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history, wbw_history): # a unused
+#def train(a, xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity): # a unused
+def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
     # cudnn related setting
     cudnn.benchmark = True
     torch.backends.cudnn.deterministic = False
@@ -55,18 +56,18 @@ def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     
-    if not binarized and not quantized:
+    if not xnor_quantized and not fp_quantized:
       prefix = "full"
       subdir = prefix + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
     else:
-      if binarized:
-        prefix = "binarized"
-      elif quantized:
-        prefix = "quantized"
+      if xnor_quantized:
+        prefix = "xnor"
+      elif fp_quantized:
+        prefix = "fp"
         
       subdir = prefix
-      subdir += "_abw_" + str(bitwidth)
-      subdir += "_wbw_" + str(weight_bitwidth)
+      subdir += "_abw_" + str(abw_history[-1])
+      subdir += "_wbw_" + str(wbw_history[-1])
       if sparsity > 0:
         subdir += "_sparsity_" + str(sparsity)
       subdir += "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
@@ -83,12 +84,12 @@ def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history
         os.makedirs(model_dir)
 
     # model and optimizer
-    if not binarized and not quantized:
+    if not xnor_quantized and not fp_quantized:
       model = resnet_full.resnet18(num_classes=num_classes, input_channels=1, normalize_output=False)
-    elif binarized:
-      model = resnet_dense_xnor.resnet18(num_classes=num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=1, normalize_output=False)
-    elif quantized:
-      model = resnet_quantized.resnet18(num_classes=num_classes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, input_channels=1, normalize_output=False)
+    elif xnor_quantized:
+      model = resnet_dense_xnor.resnet18(num_classes=num_classes, bitwidth=abw_history[-1], weight_bitwidth=wbw_history[-1], input_channels=1, normalize_output=False)
+    elif fp_quantized:
+      model = resnet_quantized.resnet18(num_classes=num_classes, bitwidth=abw_history[-1], weight_bitwidth=wbw_history[-1], input_channels=1, normalize_output=False)
 
     #torchsummary.summary(model.cuda(), (1, 300, 257))
     if cuda:
@@ -101,12 +102,26 @@ def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history
     #Tianmu: Can simply change bitwidth of each layer (no need to copy)
     #initialize model weights using existing resnet model
     
-    #pretrained_model_path = "pretrained/checkpoint_best.pth"
-    pretrained_model_dir = "full_20220413-054624"
-    pretrained_ckpt = "checkpoint_best.pth"
-    pretrained_model_path = os.path.join(pretrained_model_dir, pretrained_ckpt)
-    model.load_state_dict(torch.load(os.path.join("../models/autospeech/", pretrained_model_path))["state_dict"], strict=False)
+    #pretrained_model_dir = "full_20220413-054624"
+    #pretrained_ckpt = "checkpoint_best.pth"
+    pretrained_model_dir = None
+    pretrained_ckpt = None
+    if pretrained_model_dir and pretrained_ckpt:
+        pretrained_model_path = os.path.join(pretrained_model_dir, pretrained_ckpt)
+        model.load_state_dict(torch.load(os.path.join("../models/autospeech/", pretrained_model_path))["state_dict"], strict=False)
     
+    model_data = {
+        "type": prefix,
+        "pretrained_model_dir": pretrained_model_dir,
+        "pretrained_ckpt": pretrained_ckpt,
+        "abw_history": abw_history,
+        "wbw_history": wbw_history,
+        "sparsity": sparsity,
+    }
+    model_data_path = os.path.join(log_dir, "metadata.json")
+    with open(model_data_path, 'w') as f:
+        json.dump(model_data, f, indent=4)
+
     dummy_input = torch.zeros((1, 1, 300, 257))
     if cuda:
         dummy_input = dummy_input.cuda()
@@ -162,37 +177,36 @@ def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history
     top1_history = []
     top5_history = []
     eer_history = []
-    if binarized or quantized:
-        if binarized or quantized:
-            epochs = list(range(1, end_epoch))
-            fig_bw, ax_bw = plt.subplots()
-            ax_bw.plot(epochs, abw_history, label='activation bw')
-            ax_bw.plot(epochs, wbw_history, label='weight bw')
-            ax_bw.set_title("Bitwidth Adjustment")
-            ax_bw.set_xlabel("Epochs")
-            ax_bw.set_ylabel("EER")
-            ax_bw.legend()
-            fig_bw.savefig(os.path.join(log_dir, "bw_adjustment.png"))
+    if xnor_quantized or fp_quantized:
+        epochs = list(range(1, end_epoch))
+        fig_bw, ax_bw = plt.subplots()
+        ax_bw.plot(epochs, abw_history, label='activation bw')
+        ax_bw.plot(epochs, wbw_history, label='weight bw')
+        ax_bw.set_title("Bitwidth Adjustment")
+        ax_bw.set_xlabel("Epochs")
+        ax_bw.set_ylabel("Bitwidth")
+        ax_bw.legend()
+        fig_bw.savefig(os.path.join(log_dir, "bw_adjustment.png"))
 
         plt.close('all')
     
     for epoch in tqdm(range(begin_epoch, end_epoch), desc='train progress'):
-        if binarized or quantized:
+        if xnor_quantized or fp_quantized:
             if epoch==0 or (not abw_history[epoch]==abw_history[epoch-1]) or (not wbw_history[epoch]==wbw_history[epoch-1]):
                 logger.info("Activation bw: {}, Weight bw: {}".format(abw_history[epoch], wbw_history[epoch]))
             model.change_bitwidth(abw_history[epoch], wbw_history[epoch])
 
         model.train()
         top1, top5, loss = train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_dict, learning_rate, print_freq, lr_scheduler, cuda=cuda)
-        loss_history.append(loss)
-        top1_history.append(top1)
-        top5_history.append(top5)
+        loss_history.append(float(loss))
+        top1_history.append(float(top1))
+        top5_history.append(float(top5))
         logger.info("Epoch average loss {}".format(loss))
         logger.info("Epoch average top1 {}".format(top1))
         logger.info("Epoch average top5 {}".format(top5))
         if epoch % val_freq == 0:
             eer = validate_verification(model, test_loader_verification, cuda=cuda)
-            eer_history.append(eer)
+            eer_history.append(float(eer))
             model.eval()
 
             # remember best acc@1 and save checkpoint
@@ -213,6 +227,16 @@ def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history
         epochs = list(range(1, epoch+2))
         epochs_eval = list(range(1, epoch+2, val_freq))
 
+        model_data["epochs"] = epochs
+        model_data["epochs_eval"] = epochs_eval
+        model_data["loss_history"] = loss_history
+        model_data["top1_history"] = top1_history
+        model_data["top5_history"] = top5_history
+        model_data["eer_history"] = eer_history
+        with open(model_data_path, 'w') as f:
+            json.dump(model_data, f, indent=4)
+
+        #Visualization
         fig_loss, ax_loss = plt.subplots()
         ax_loss.plot(epochs, loss_history)
         ax_loss.set_title("Training Loss Convergence")
@@ -232,7 +256,7 @@ def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history
         ax_top5.set_ylabel("Training Top5")
         fig_top5.savefig(os.path.join(log_dir, "top5_convergence.png"))
         fig_eer, ax_eer = plt.subplots()
-        ax_eer.plot(epochs_eval, eer_history)
+        ax_eer.plot(epochs_eval, np.array(eer_history)*100)
         ax_eer.set_title("Evaluation EER Convergence")
         ax_eer.set_xlabel("Epochs")
         ax_eer.set_ylabel("EER")
@@ -240,13 +264,13 @@ def train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history
         plt.close('all')
 
 def main():
-    abw_history = [4]*25+[2]*(end_epoch-begin_epoch-1-25)
-    wbw_history = [4]*25+[2]*25+[1]*(end_epoch-begin_epoch-1-(25+25))
+    abw_history = [6]*25+[4]*25+[2]*25+[2]*25+[1]*(end_epoch-begin_epoch-1-100)
+    wbw_history = [6]*25+[4]*25+[2]*25+[1]*25+[1]*(end_epoch-begin_epoch-1-100)
 
-    model_combinations = [(False, True, 2, 1, 0, abw_history, wbw_history)] #binarized, quantized, activation bitwidth, weight bitwidth, sparsity, pretrain abw, pretrain wbw
+    model_combinations = [(True, False, abw_history, wbw_history, 0)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
 
-    for (binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history, wbw_history) in model_combinations:
-        train(binarized, quantized, bitwidth, weight_bitwidth, sparsity, abw_history, wbw_history)
+    for (xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity) in model_combinations:
+        train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity)
 
 if __name__ == '__main__':
     main()
