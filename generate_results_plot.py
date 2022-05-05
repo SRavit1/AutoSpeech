@@ -26,7 +26,7 @@ for i in to_remove:
 
 fig, ax = plt.subplots()
 ax.scatter(mu_runtime, eer_vals)
-ax.set_title("Speaker Verificaiton EER vs Runtime")
+ax.set_title("Speaker Verification EER vs Runtime")
 ax.set_xlabel("Runtime (mu_s)")
 ax.set_ylabel("EER")
 
@@ -48,7 +48,7 @@ for i in to_remove:
 
 fig, ax = plt.subplots()
 ax.scatter(storage_kb, eer_vals)
-ax.set_title("Speaker Verificaiton EER vs Parameter Storage")
+ax.set_title("Speaker Verification EER vs Parameter Storage")
 ax.set_xlabel("Parameter Storage Size (KB)")
 ax.set_ylabel("EER")
 ax.ticklabel_format(style='sci', axis='x', scilimits=(0,0))
