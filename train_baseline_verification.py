@@ -36,7 +36,7 @@ num_workers=0
 num_classes=1211
 batch_size=128
 begin_epoch=0
-end_epoch=301
+end_epoch=101
 pretrain_epoch = 50
 val_freq=10
 print_freq=200
@@ -264,8 +264,8 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
         plt.close('all')
 
 def main():
-    abw_history = [6]*25+[4]*25+[2]*25+[2]*25+[1]*(end_epoch-begin_epoch-1-100)
-    wbw_history = [6]*25+[4]*25+[2]*25+[1]*25+[1]*(end_epoch-begin_epoch-1-100)
+    abw_history = [4]*10+[2]*10+[2]*10+[1]*(end_epoch-begin_epoch-1-30)
+    wbw_history = [4]*10+[2]*10+[1]*10+[1]*(end_epoch-begin_epoch-1-30)
 
     model_combinations = [(True, False, abw_history, wbw_history, 0)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
 

@@ -118,7 +118,13 @@ def validate_verification(model, test_loader, cuda=False):
         labels = np.array([sublabel for label in labels for sublabel in label])
         distances = np.array([subdist for dist in distances for subdist in dist])
 
-        eer = compute_eer(distances, labels)
+        try:
+            eer = compute_eer(distances, labels)
+        except Exception:
+            logger.info("Exception arose in calculation of EER. First 10 distance values: {}".format(distances[:10]))
+            logger.debug("Contains NaN: {}, Contains inf: {}, Min value: {}, Max value: {}".format
+                (np.isnan(distances).any(), np.isinf(distances).any(), distances.min(), distances.max()))
+            eer = -1
         logger.info('Test EER: {:.8f}'.format(np.mean(eer)))
 
     return eer
