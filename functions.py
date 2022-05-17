@@ -122,9 +122,9 @@ def validate_verification(model, test_loader, cuda=False):
             eer = compute_eer(distances, labels)
         except Exception:
             logger.info("Exception arose in calculation of EER. First 10 distance values: {}".format(distances[:10]))
-            logger.debug("Contains NaN: {}, Contains inf: {}, Min value: {}, Max value: {}".format
+            logger.info("Contains NaN: {}, Contains inf: {}, Min value: {}, Max value: {}".format
                 (np.isnan(distances).any(), np.isinf(distances).any(), distances.min(), distances.max()))
-            eer = -1
+            eer = 1
         logger.info('Test EER: {:.8f}'.format(np.mean(eer)))
 
     return eer

@@ -36,7 +36,7 @@ num_workers=0
 num_classes=1211
 batch_size=128
 begin_epoch=0
-end_epoch=101
+end_epoch=501
 pretrain_epoch = 50
 val_freq=10
 print_freq=200
@@ -204,10 +204,11 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
         logger.info("Epoch average loss {}".format(loss))
         logger.info("Epoch average top1 {}".format(top1))
         logger.info("Epoch average top5 {}".format(top5))
+
         if epoch % val_freq == 0:
+            model.eval()
             eer = validate_verification(model, test_loader_verification, cuda=cuda)
             eer_history.append(float(eer))
-            model.eval()
 
             # remember best acc@1 and save checkpoint
             is_best = eer < best_eer
@@ -264,8 +265,8 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
         plt.close('all')
 
 def main():
-    abw_history = [4]*10+[2]*10+[2]*10+[1]*(end_epoch-begin_epoch-1-30)
-    wbw_history = [4]*10+[2]*10+[1]*10+[1]*(end_epoch-begin_epoch-1-30)
+    abw_history = [4]*10+[2]*(end_epoch-begin_epoch-1-10)
+    wbw_history = [4]*10+[2]*(end_epoch-begin_epoch-1-10)
 
     model_combinations = [(True, False, abw_history, wbw_history, 0)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
 
