@@ -4,9 +4,9 @@ import os
 from matplotlib import pyplot as plt
 
 full = False
-subdir = "quantized_abw_2_wbw_1_20220428-115037"
+subdir = "xnor_abw_1_wbw_1_20220511-192327"
 log_dir = os.path.join("../logs/autospeech", subdir)
-training_notes_path = os.path.join(log_dir, "notes.json")
+training_notes_path = os.path.join(log_dir, "metadata.json")
 
 with open(training_notes_path,'r') as f:
 	training_data = json.load(f)
@@ -82,13 +82,22 @@ ax_top5.annotate("Best epoch: " + str(round(best_top5, 2)), (best_epoch, best_to
 fig_top5.savefig(os.path.join(log_dir, "top5_convergence.png"))
 
 fig_eer, ax_eer = plt.subplots()
-ax_eer.plot(epochs_eval, np.array(eer_history))
+epochs_eval = np.array(epochs_eval)
+eer_history = np.array(eer_history)
+eer_history_low = np.min(epochs_eval)
+eer_history_high = np.max(epochs_eval)
+indices = np.invert((eer_history==100))
+epochs_eval = epochs_eval[indices]
+eer_history = eer_history[indices]
+ax_eer.set_xlim(eer_history_low, eer_history_high)
+ax_eer.plot(epochs_eval, eer_history)
+#ax_eer.plot(epochs_eval, np.array(eer_history))
 ax_eer.set_title("Evaluation EER Convergence")
 ax_eer.set_xlabel("Epochs")
 ax_eer.set_ylabel("EER")
 ax_eer.vlines(final_bw_epoch, min(eer_history), max(eer_history), colors='r')
-best_eer = eer_history[epochs_eval.index(best_epoch)]
+best_eer = eer_history[list(epochs_eval).index(best_epoch)]
 ax_eer.scatter([best_epoch], [best_eer], marker='x')
-ax_eer.annotate("Best epoch: " + str(round(best_eer, 2)), (best_epoch, best_eer+0.1))
+ax_eer.annotate("Best epoch: " + str(round(best_eer, 2)), (best_epoch-15, best_eer+0.1))
 fig_eer.savefig(os.path.join(log_dir, "eer_convergence.png"))
 plt.close('all')
