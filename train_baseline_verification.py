@@ -205,7 +205,7 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
         logger.info("Epoch average top1 {}".format(top1))
         logger.info("Epoch average top5 {}".format(top5))
 
-        if epoch % val_freq == 0:
+        if (not epoch == 0) and epoch % val_freq == 0:
             model.eval()
             eer = validate_verification(model, test_loader_verification, cuda=cuda)
             eer_history.append(float(eer))
@@ -226,7 +226,7 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
         lr_scheduler.step(epoch)
 
         epochs = list(range(1, epoch+2))
-        epochs_eval = list(range(1, epoch+2, val_freq))
+        epochs_eval = list(range(1+val_freq, epoch+2, val_freq))
 
         model_data["epochs"] = epochs
         model_data["epochs_eval"] = epochs_eval
