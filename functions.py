@@ -59,7 +59,7 @@ def train_from_scratch(model, optimizer, train_loader, criterion, epoch, writer_
         optimizer.step()
         for p in model.modules():
             if hasattr(p, 'weight_org'):
-                p.weight_org.copy_(p.weight.data.clamp_(-1,1))
+                p.weight_org.copy_(p.weight.data.clamp_(-1,1)) #not (-0.99, 0.99)?
 
         # measure elapsed time
         batch_time.update(time.time() - end)

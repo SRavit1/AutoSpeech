@@ -30,8 +30,8 @@ from functions import train_from_scratch, validate_verification
 
 cuda = True
 seed=0
-lr_min=0.001
-learning_rate=0.01
+lr_min=1e-4
+learning_rate=1e-3
 num_workers=0
 num_classes=1211
 batch_size=128
@@ -97,7 +97,7 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
         model = model.cuda()
     optimizer = optim.Adam(
         model.net_parameters() if hasattr(model, 'net_parameters') else model.parameters(),
-        lr=0.01,
+        lr=learning_rate,
     )
 
     #Tianmu: Can simply change bitwidth of each layer (no need to copy)
