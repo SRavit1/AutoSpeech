@@ -294,8 +294,8 @@ def parse_args():
 def main():
     args = parse_args()
 
-    abw_history = [4]*25+[args.abw_final]*(end_epoch-begin_epoch-1-25)
-    wbw_history = [4]*25+[args.wbw_final]*(end_epoch-begin_epoch-1-25)
+    abw_history = [4]*10+[args.abw_final]*(end_epoch-begin_epoch-1-10)
+    wbw_history = [4]*10+[args.wbw_final]*(end_epoch-begin_epoch-1-10)
 
     model_combinations = [(args.xnor, args.fp, abw_history, wbw_history, args.sparsity)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
 
