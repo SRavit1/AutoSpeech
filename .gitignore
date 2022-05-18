@@ -1,3 +1,6 @@
+dataset.txt
+utils.py
+utils_own.py
 logs/**
 logs_search/**
 models/__pycache__/**

@@ -15,7 +15,7 @@ import json
 import torch
 import torch.optim as optim
 import torch.backends.cudnn as cudnn
-import torchsummary
+#import torchsummary
 
 import concurrent.futures
 import multiprocessing
@@ -73,7 +73,8 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
       subdir += "_" + datetime.strftime(datetime.now(), '%Y%m%d-%H%M%S')
 
     print("Model/Log Subdir", subdir)
-    data_dir = "/mnt/usb/data/ravit/datasets/VoxCeleb1"
+    with open("./dataset.txt", 'r') as f:
+        data_dir = f.read().strip()
 
     log_dir = os.path.join("../logs/autospeech", subdir)
     if not os.path.isdir(log_dir):  # Create the log directory if it doesn't exist
@@ -264,11 +265,39 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
         fig_eer.savefig(os.path.join(log_dir, "eer_convergence.png"))
         plt.close('all')
 
-def main():
-    abw_history = [4]*10+[2]*(end_epoch-begin_epoch-1-10)
-    wbw_history = [4]*10+[2]*(end_epoch-begin_epoch-1-10)
+def parse_args():
+    parser = argparse.ArgumentParser(description='Train binarized/fixed point/full precision AutoSpeech.')
+    # general
+    parser.add_argument('--xnor',
+                        help='use xnor neural network',
+                        action='store_true')
+    parser.add_argument('--fp',
+                        help='use fixed point (fp) neural network',
+                        action='store_true')
+    parser.add_argument('--abw_final',
+                        help='activation bw',
+                        default=2,
+                        type=int)
+    parser.add_argument('--wbw_final',
+                        help='weight bw',
+                        default=2,
+                        type=int)
+    parser.add_argument('--sparsity',
+                        help='weight bw',
+                        default=0,
+                        type=float)
 
-    model_combinations = [(True, False, abw_history, wbw_history, 0)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
+    args = parser.parse_args()
+
+    return args
+
+def main():
+    args = parse_args()
+
+    abw_history = [4]*25+[args.abw_final]*(end_epoch-begin_epoch-1-25)
+    wbw_history = [4]*25+[args.wbw_final]*(end_epoch-begin_epoch-1-25)
+
+    model_combinations = [(args.xnor, args.fp, abw_history, wbw_history, args.sparsity)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
 
     for (xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity) in model_combinations:
         train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity)
