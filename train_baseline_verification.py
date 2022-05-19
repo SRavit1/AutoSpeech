@@ -103,13 +103,11 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
     #Tianmu: Can simply change bitwidth of each layer (no need to copy)
     #initialize model weights using existing resnet model
     
-    #pretrained_model_dir = "full_20220413-054624"
-    #pretrained_ckpt = "checkpoint_best.pth"
-    pretrained_model_dir = None
-    pretrained_ckpt = None
+    pretrained_model_dir = "full_20220413-054624/models"
+    pretrained_ckpt = "checkpoint_best.pth"
     if pretrained_model_dir and pretrained_ckpt:
         pretrained_model_path = os.path.join(pretrained_model_dir, pretrained_ckpt)
-        model.load_state_dict(torch.load(os.path.join("../models/autospeech/", pretrained_model_path))["state_dict"], strict=False)
+        model.load_state_dict(torch.load(os.path.join("../logs/autospeech", pretrained_model_path))["state_dict"], strict=False)
     
     model_data = {
         "type": prefix,
