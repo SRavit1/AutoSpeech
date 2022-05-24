@@ -31,7 +31,7 @@ from functions import train_from_scratch, validate_verification
 cuda = True
 seed=0
 lr_min=1e-4
-learning_rate=1e-3
+learning_rate=1e-4
 num_workers=0
 num_classes=1211
 batch_size=128
