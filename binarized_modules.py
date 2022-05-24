@@ -46,6 +46,7 @@ def Binarize(tensor,quant_mode='det',bitwidth=1):
         return (tensor>=0).type(type(tensor))*2-1
     else:
         return tensor.add_(1).div_(2).add_(torch.rand(tensor.size()).add(-0.5)).clamp_(0,1).round().mul_(2).add_(-1)
+"""
 
 def Ternarize(tensor, mult = 0.7, mask = None, permute_list = None, pruned = False, align = False, pack = 32):
     if type(mask) == type(None):
@@ -168,6 +169,7 @@ class TernarizeLinear(nn.Linear):
             out += self.bias.view(1, -1).expand_as(out)
         return out
 
+"""
 #NOTE: output_bit unused parameter; remove in next revision
 #Not changing now because it would break other code
 class BinarizeConv2d(nn.Conv2d):
@@ -215,6 +217,7 @@ class BinarizeConv2d(nn.Conv2d):
         #        np.save(f, temp)
 
         return out
+"""
 
 #NOTE: output_bit unused parameter; remove in next revision
 #Not changing now because it would break other code
@@ -280,7 +283,6 @@ class TernarizeConv2d(nn.Conv2d):
         #    with open("./" + str(now.minute) + str(now.second) + str(now.microsecond) + ".npy", "wb") as f:
         #        np.save(f, temp)
         return out
-"""
 
 def Binarize(tensor,quant_mode='det',bitwidth=1):
     if quant_mode == 'input':
