@@ -220,7 +220,7 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
                 'state_dict': model.state_dict(),
                 'best_eer': best_eer,
                 'optimizer': optimizer.state_dict()
-            }, is_best, model_dir, 'checkpoint_{}.pth'.format(epoch))
+            }, is_best, model_dir, 'checkpoint_latest.pth')
 
         lr_scheduler.step(epoch)
 
