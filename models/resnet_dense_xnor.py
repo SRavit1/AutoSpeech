@@ -78,11 +78,13 @@ class BasicBlock(nn.Module):
         # Both self.conv1 and self.downsample layers downsample the input when stride != 1
         self.conv1 = conv3x3(inplanes, planes, stride, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.bn1 = norm_layer(planes)
-        self.act = nn.Hardtanh(inplace=True)
+        #removed inplace due to error from torch 1.9
+        self.act = nn.Hardtanh()
         self.conv2 = conv3x3(planes, planes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
         self.stride = stride
+        self.bn3 = norm_layer(planes)
 
     def change_bitwidth(self, wbw, abw):
         self.conv1.input_bit = abw
@@ -98,19 +100,20 @@ class BasicBlock(nn.Module):
         identity = x.clone()
         #identity.retain_grad()
         
-        out = self.act(x)
-        out = self.conv1(out)
+        out = self.conv1(x)
         out = self.bn1(out)
 
         out = self.act(out)
+        
         out = self.conv2(out)
         out = self.bn2(out)
 
         if self.downsample is not None:
-            identity = self.downsample(x)
+            identity = self.downsample(identity)
+            identity = self.bn3(identity)
 
         out += identity
-        #out = self.act(out)
+        out = self.act(out)
 
         return out
 
@@ -446,4 +449,3 @@ def wide_resnet101_2(pretrained: bool = False, progress: bool = True, **kwargs: 
         progress (bool): If True, displays a progress bar of the download to stderr
     """
     kwargs["width_per_group"] = 64 * 2
-    return _resnet("wide_resnet101_2", Bottleneck, [3, 4, 23, 3], pretrained, progress, **kwargs)
