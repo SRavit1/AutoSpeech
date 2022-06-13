@@ -67,7 +67,7 @@ class BasicBlock(nn.Module):
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
         bitwidth=1, weight_bitwidth=1,
-        activation_type="htanh"
+        activation_type="htanh", leaky_relu_slope=0.1
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -80,7 +80,7 @@ class BasicBlock(nn.Module):
         self.conv1 = conv3x3(inplanes, planes, stride, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.bn1 = norm_layer(planes)
         #removed inplace due to error from torch 1.9
-        self.act = get_activation(activation_type)
+        self.act = get_activation(activation_type, input_shape=(1, planes, 1, 1), leaky_relu_slope=leaky_relu_slope)
         self.conv2 = conv3x3(planes, planes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
@@ -190,7 +190,7 @@ class ResNet(nn.Module):
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
         bitwidth=1, weight_bitwidth=1, 
-        activation_type="htanh",
+        activation_type="htanh", leaky_relu_slope=0.1,
         input_channels=3, normalize_output=False
     ) -> None:
         super().__init__()
@@ -216,13 +216,14 @@ class ResNet(nn.Module):
 
         self.conv1 = nn.Conv2d(input_channels, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(self.inplanes)
-        self.activation_type = activation_type
-        self.act = get_activation(activation_type)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.activation_type = activation_type
+        self.leaky_relu_slope = leaky_relu_slope
         self.layer1 = self._make_layer(block, 64, layers[0], bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2, dilate=replace_stride_with_dilation[1], bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2, dilate=replace_stride_with_dilation[2], bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
+        self.act = get_activation(self.activation_type, input_shape=(1, 512, 1, 1), leaky_relu_slope=self.leaky_relu_slope)
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.bn2 = norm_layer(512)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
@@ -280,7 +281,7 @@ class ResNet(nn.Module):
         layers.append(
             block(
                 self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer, 
-                    bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, activation_type=self.activation_type
+                    bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, activation_type=self.activation_type, leaky_relu_slope=self.leaky_relu_slope
             )
         )
         self.inplanes = planes * block.expansion
@@ -292,7 +293,8 @@ class ResNet(nn.Module):
                     groups=self.groups,
                     base_width=self.base_width,
                     dilation=self.dilation,
-                    norm_layer=norm_layer, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, activation_type=self.activation_type
+                    norm_layer=norm_layer, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, activation_type=self.activation_type,
+                    leaky_relu_slope=self.leaky_relu_slope
                 )
             )
 
