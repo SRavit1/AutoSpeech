@@ -45,7 +45,7 @@ sub_dir="dev"
 partial_n_frames=300
 
 #def train(a, xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity): # a unused
-def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
+def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity, activation_type):
     # cudnn related setting
     cudnn.benchmark = True
     torch.backends.cudnn.deterministic = False
@@ -88,7 +88,7 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity):
     if not xnor_quantized and not fp_quantized:
       model = resnet_full.resnet18(num_classes=num_classes, input_channels=1, normalize_output=False)
     elif xnor_quantized:
-      model = resnet_dense_xnor.resnet18(num_classes=num_classes, bitwidth=abw_history[-1], weight_bitwidth=wbw_history[-1], input_channels=1, normalize_output=False)
+      model = resnet_dense_xnor.resnet18(num_classes=num_classes, bitwidth=abw_history[-1], weight_bitwidth=wbw_history[-1], input_channels=1, normalize_output=False, activation_type=activation_type)
     elif fp_quantized:
       model = resnet_quantized.resnet18(num_classes=num_classes, bitwidth=abw_history[-1], weight_bitwidth=wbw_history[-1], input_channels=1, normalize_output=False)
 
@@ -284,6 +284,10 @@ def parse_args():
                         help='weight bw',
                         default=0,
                         type=float)
+    parser.add_argument('--activation_type',     # "htanh", "leaky_relu", "2bn", "relu_bias"
+                        help='type of xnor activation',
+                        default="htanh",
+                        type=str)
 
     args = parser.parse_args()
 
@@ -295,10 +299,10 @@ def main():
     abw_history = [4]*10+[args.abw_final]*(end_epoch-begin_epoch-1-10)
     wbw_history = [4]*10+[args.wbw_final]*(end_epoch-begin_epoch-1-10)
 
-    model_combinations = [(args.xnor, args.fp, abw_history, wbw_history, args.sparsity)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
+    model_combinations = [(args.xnor, args.fp, abw_history, wbw_history, args.sparsity, args.activation_type)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
 
-    for (xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity) in model_combinations:
-        train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity)
+    for (xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity, activation_type) in model_combinations:
+        train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity, activation_type)
 
 if __name__ == '__main__':
     main()

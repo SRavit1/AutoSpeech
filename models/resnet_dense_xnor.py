@@ -7,7 +7,7 @@ import torch.nn as nn
 from torch import Tensor
 
 import binarized_modules
-from binarized_modules import BinarizeConv2d, BinarizeLinear, TernarizeConv2d, TernarizeLinear, QuantizeConv2d, QuantizeLinear
+from binarized_modules import get_activation, BinarizeConv2d, BinarizeLinear, TernarizeConv2d, TernarizeLinear, QuantizeConv2d, QuantizeLinear
 
 #from .._internally_replaced_utils import load_state_dict_from_url
 #from ..utils import _log_api_usage_once
@@ -66,7 +66,8 @@ class BasicBlock(nn.Module):
         base_width: int = 64,
         dilation: int = 1,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        bitwidth=1, weight_bitwidth=1
+        bitwidth=1, weight_bitwidth=1,
+        activation_type="htanh"
     ) -> None:
         super().__init__()
         if norm_layer is None:
@@ -79,7 +80,7 @@ class BasicBlock(nn.Module):
         self.conv1 = conv3x3(inplanes, planes, stride, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.bn1 = norm_layer(planes)
         #removed inplace due to error from torch 1.9
-        self.act = nn.Hardtanh()
+        self.act = get_activation(activation_type)
         self.conv2 = conv3x3(planes, planes, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.bn2 = norm_layer(planes)
         self.downsample = downsample
@@ -188,7 +189,9 @@ class ResNet(nn.Module):
         width_per_group: int = 64,
         replace_stride_with_dilation: Optional[List[bool]] = None,
         norm_layer: Optional[Callable[..., nn.Module]] = None,
-        bitwidth=1, weight_bitwidth=1, input_channels=3, normalize_output=False
+        bitwidth=1, weight_bitwidth=1, 
+        activation_type="htanh",
+        input_channels=3, normalize_output=False
     ) -> None:
         super().__init__()
         #_log_api_usage_once(self)
@@ -213,7 +216,8 @@ class ResNet(nn.Module):
 
         self.conv1 = nn.Conv2d(input_channels, self.inplanes, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = norm_layer(self.inplanes)
-        self.act = nn.Hardtanh(inplace=True)
+        self.activation_type = activation_type
+        self.act = get_activation(activation_type)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2, dilate=replace_stride_with_dilation[0], bitwidth=bitwidth, weight_bitwidth=weight_bitwidth)
@@ -275,7 +279,8 @@ class ResNet(nn.Module):
         layers = []
         layers.append(
             block(
-                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth
+                self.inplanes, planes, stride, downsample, self.groups, self.base_width, previous_dilation, norm_layer, 
+                    bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, activation_type=self.activation_type
             )
         )
         self.inplanes = planes * block.expansion
@@ -287,7 +292,7 @@ class ResNet(nn.Module):
                     groups=self.groups,
                     base_width=self.base_width,
                     dilation=self.dilation,
-                    norm_layer=norm_layer, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth
+                    norm_layer=norm_layer, bitwidth=bitwidth, weight_bitwidth=weight_bitwidth, activation_type=self.activation_type
                 )
             )
 
