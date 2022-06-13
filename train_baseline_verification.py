@@ -45,7 +45,10 @@ sub_dir="dev"
 partial_n_frames=300
 
 #def train(a, xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity): # a unused
-def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity, activation_type, leaky_relu_slope):
+def train(args, abw_history, wbw_history):
+    xnor_quantized, fp_quantized, sparsity, activation_type, leaky_relu_slope = args.xnor, \
+        args.fp, args.sparsity, args.activation_type, args.leaky_relu_slope
+    
     # cudnn related setting
     cudnn.benchmark = True
     torch.backends.cudnn.deterministic = False
@@ -111,6 +114,7 @@ def train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity, acti
     
     model_data = {
         "type": prefix,
+        "config": vars(args),
         "pretrained_model_dir": pretrained_model_dir,
         "pretrained_ckpt": pretrained_ckpt,
         "abw_history": abw_history,
@@ -303,10 +307,10 @@ def main():
     abw_history = [4]*10+[args.abw_final]*(end_epoch-begin_epoch-1-10)
     wbw_history = [4]*10+[args.wbw_final]*(end_epoch-begin_epoch-1-10)
 
-    model_combinations = [(args.xnor, args.fp, abw_history, wbw_history, args.sparsity, args.activation_type, args.leaky_relu_slope)] #xnor_quantized, fp_quantized, pretrain abw, pretrain wbw, sparsity
+    model_combinations = [(args, abw_history, wbw_history)]
 
-    for (xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity, activation_type, leaky_relu_slope) in model_combinations:
-        train(xnor_quantized, fp_quantized, abw_history, wbw_history, sparsity, activation_type, leaky_relu_slope)
+    for (args, abw_history, wbw_history) in model_combinations:
+        train(args, abw_history, wbw_history)
 
 if __name__ == '__main__':
     main()
