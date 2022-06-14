@@ -1,0 +1,9 @@
+{
+  "save_dir": "../plots/xnor_optimizations_plots",
+  "models": {
+    "Plain": "xnor_abw_2_wbw_1_20220612-085439",
+    "Leaky ReLU": "xnor_abw_2_wbw_1_20220613-063831",
+    "2 BN": "xnor_abw_2_wbw_1_20220613-063927",
+    "ReLU + Bias": "xnor_abw_2_wbw_1_20220613-063938"
+  }
+}

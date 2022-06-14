@@ -1,0 +1,7 @@
+{
+  "save_dir": "../plots/new_residuals_plots",
+  "models": {
+    "Old Residuals": "xnor_abw_2_wbw_1_20220524-084650",
+    "New Residuals": "xnor_abw_2_wbw_1_20220612-085439"
+  }
+}
