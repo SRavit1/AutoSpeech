@@ -1,0 +1,10 @@
+{
+    "save_dir": "../plots/leaky_relu_experiments",
+    "models": {
+      "0.05": "xnor_abw_2_wbw_1_20220614-165129",
+      "0.1": "xnor_abw_2_wbw_1_20220613-063831",
+      "0.3": "xnor_abw_2_wbw_1_20220614-165032",
+      "0.5": "xnor_abw_2_wbw_1_20220614-165045"
+    }
+  }
+  

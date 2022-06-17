@@ -77,7 +77,7 @@ def generate_training_plots(config):
     indices = np.invert((eer_history==100))
     epochs_eval = epochs_eval[indices]
     eer_history = eer_history[indices]
-    ax_eer.set_xlim(eer_history_low, eer_history_high)
+    #ax_eer.set_xlim(eer_history_low, eer_history_high)
     ax_eer.plot(epochs_eval, eer_history, label=title)
     #ax_eer.plot(epochs_eval, np.array(eer_history))
     ax_eer.vlines(final_bw_epoch, min(eer_history), max(eer_history), colors='r')
